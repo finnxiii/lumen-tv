@@ -1,0 +1,46 @@
+# macOS
+.DS_Store
+
+# IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+dist/
+build/
+
+# Vega package
+*.vpkg
+
+# Test coverage
+coverage/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Media / clip variants
+media/
+*.mp4
+*.mov
+
+# Claude Code (local only, never commit)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
