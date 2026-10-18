@@ -296,7 +296,6 @@ export const SwapSoakTest: React.FC = () => {
       playerRef.current.pause();
       playerRef.current.deinitialize().catch(() => {});
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const src = SOURCES[srcIdx] ?? SOURCES[0];

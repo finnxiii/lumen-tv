@@ -216,7 +216,7 @@ export const PlaybackSpike: React.FC = () => {
         surfaceOwnerRef.current = null;
       }
       old.pause();
-      try { await withTimeout(old.deinitialize(), 3000, 'deinit'); } catch {}
+      try { await withTimeout(old.deinitialize(), 3000, 'deinit'); } catch (_) { /* timeout: continue */ }
       const newPlayer = new VideoPlayer();
       playerRef.current = newPlayer;
       playerInitializedRef.current = false;

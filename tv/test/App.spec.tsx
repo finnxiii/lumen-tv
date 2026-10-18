@@ -1,25 +1,49 @@
-import 'react-native';
-import {render} from '@testing-library/react-native';
-import * as React from 'react';
+/**
+ * Rendering tests require a native Vega environment (native modules not
+ * available in Jest). Full UI is verified on the Virtual Device.
+ * This suite tests pure-JS logic that runs everywhere.
+ */
 
-// Stage 2: w3cmedia registers a TurboModule at import time which isn't available in Jest.
-jest.mock('@amazon-devices/react-native-w3cmedia', () => ({}));
+import reelData from '../src/data/reel.json';
+import {MockSessionClient} from '../src/session/MockSessionClient';
 
-import {App} from '../src/App';
-
-// Stage 2: App now renders PlaybackSpike which requires native media modules.
-// These tests are skipped until the home screen is restored in Stage 4.
-describe.skip('App', () => {
-  it('matches snapshot', () => {
-    const screen = render(<App />);
-    expect(screen).toMatchSnapshot();
+describe('reel.json', () => {
+  it('has 10 segments in the correct order', () => {
+    expect(reelData.order).toHaveLength(10);
+    expect(reelData.order[0]).toMatchObject({clip: 'night', variant: 'original', start: 0});
+    expect(reelData.order[9]).toMatchObject({clip: 'day', variant: 'sports', start: 405});
   });
 
-  it('renders all tiles', () => {
-    const screen = render(<App />);
-    expect(screen.getByTestId('tile-home')).toBeTruthy();
-    expect(screen.getByTestId('tile-get-started')).toBeTruthy();
-    expect(screen.getByTestId('tile-debug')).toBeTruthy();
-    expect(screen.getByTestId('tile-learn-more')).toBeTruthy();
+  it('segment starts are contiguous multiples of segmentSeconds', () => {
+    reelData.order.forEach((seg, i) => {
+      expect(seg.start).toBe(i * reelData.segmentSeconds);
+    });
+  });
+});
+
+describe('MockSessionClient', () => {
+  it('generates a 4-char code with allowed characters', () => {
+    const c = new MockSessionClient();
+    expect(c.code).toMatch(/^[A-HJ-NP-Z2-9]{4}$/);
+  });
+
+  it('emits session:state on connect', () => {
+    const c = new MockSessionClient();
+    const states: unknown[] = [];
+    c.on('session:state', s => states.push(s));
+    c.connect();
+    c.disconnect();
+    expect(states.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('emits settings:apply immediately on sendModeUpdate', () => {
+    const c = new MockSessionClient();
+    const applies: unknown[] = [];
+    c.on('settings:apply', p => applies.push(p));
+    c.connect();
+    c.sendModeUpdate('cinema', 'tv');
+    c.disconnect();
+    expect(applies).toHaveLength(1);
+    expect(applies[0]).toMatchObject({mode: 'cinema', source: 'tv'});
   });
 });

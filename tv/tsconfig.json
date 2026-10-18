@@ -2,5 +2,6 @@
     "extends": "@react-native/typescript-config",
     "compilerOptions": {
         "types": ["jest", "@amazon-devices/react-native-kepler"], // Override "jest", "react-native" from @react-native/typescript-config
+        "resolveJsonModule": true,
     },
 }
