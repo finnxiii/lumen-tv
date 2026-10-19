@@ -63,7 +63,6 @@ export const AssistantOverlay: React.FC<AssistantOverlayProps> = ({
             label="Apply"
             onPress={onApply}
             variant="primary"
-            hasTVPreferredFocus
             style={styles.btn}
           />
           <FocusButton

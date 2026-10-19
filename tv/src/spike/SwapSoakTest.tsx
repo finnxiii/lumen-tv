@@ -6,13 +6,11 @@ import {
   type EventListener as W3CEventListener,
 } from '@amazon-devices/react-native-w3cmedia';
 
-// Serve via: cloudflared tunnel --url http://localhost:8000
-// python3 -m http.server 8000 --directory /tmp/spike-media
-const TUNNEL = 'https://strength-direction-maria-machine.trycloudflare.com';
+import {MEDIA_BASE_URL} from '../config';
 
 const SOURCES: Array<{label: string; url: string}> = [
-  {label: 'T',  url: `${TUNNEL}/test.mp4`},
-  {label: 'T2', url: `${TUNNEL}/test2.mp4`},
+  {label: 'T',  url: `${MEDIA_BASE_URL}/test.mp4`},
+  {label: 'T2', url: `${MEDIA_BASE_URL}/test2.mp4`},
 ];
 
 const TOTAL_CYCLES   = 10;

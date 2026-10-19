@@ -1,24 +1,46 @@
-import React from 'react';
-import {View, Text, StyleSheet} from 'react-native';
-import {Colors} from '../theme';
+import React, {useMemo} from 'react';
+import {View, StyleSheet} from 'react-native';
+import QRCodeGen from 'qrcode';
 
 interface QRCodeProps {
   url: string;
   size?: number;
 }
 
-// Renders a placeholder QR-code area with the URL visible.
-// A full QR module can replace this without changing the API.
 export const QRCode: React.FC<QRCodeProps> = ({url, size = 200}) => {
+  const matrix = useMemo<boolean[][] | null>(() => {
+    try {
+      const qr = QRCodeGen.create(url, {errorCorrectionLevel: 'M'});
+      const {data, size: n} = qr.modules;
+      const rows: boolean[][] = [];
+      for (let r = 0; r < n; r++) {
+        const row: boolean[] = [];
+        for (let c = 0; c < n; c++) {
+          row.push(data[r * n + c] !== 0);
+        }
+        rows.push(row);
+      }
+      return rows;
+    } catch {
+      return null;
+    }
+  }, [url]);
+
+  if (!matrix) {
+    return <View style={[styles.container, {width: size, height: size}]} />;
+  }
+
+  const mod = size / matrix.length;
+
   return (
     <View style={[styles.container, {width: size, height: size}]}>
-      <View style={styles.corner} />
-      <View style={[styles.corner, styles.tr]} />
-      <View style={[styles.corner, styles.bl]} />
-      <View style={styles.inner}>
-        <Text style={styles.qrLabel}>QR</Text>
-        <Text style={styles.urlText} numberOfLines={3}>{url}</Text>
-      </View>
+      {matrix.map((row, r) => (
+        <View key={r} style={styles.row}>
+          {row.map((dark, c) => (
+            <View key={c} style={[styles.module, {width: mod, height: mod, backgroundColor: dark ? '#000' : '#fff'}]} />
+          ))}
+        </View>
+      ))}
     </View>
   );
 };
@@ -26,39 +48,10 @@ export const QRCode: React.FC<QRCodeProps> = ({url, size = 200}) => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
+    overflow: 'hidden',
   },
-  inner: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
+  row: {
+    flexDirection: 'row',
   },
-  corner: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    width: 28,
-    height: 28,
-    borderWidth: 4,
-    borderColor: '#000',
-    borderRadius: 4,
-  },
-  tr: {top: 12, left: undefined, right: 12},
-  bl: {top: undefined, bottom: 12, left: 12},
-  qrLabel: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: Colors.bg,
-    letterSpacing: 4,
-  },
-  urlText: {
-    fontSize: 9,
-    color: '#333',
-    textAlign: 'center',
-    marginTop: 4,
-  },
+  module: {},
 });

@@ -45,7 +45,7 @@ export class MockSessionClient implements SessionClient {
       settings: ZERO_SETTINGS,
       clipId: 'night',
       roomLight: 'dim',
-      expiresAt: Date.now() + 300_000,
+      expiresAt: Date.now() + 600_000,
     };
   }
 

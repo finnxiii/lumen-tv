@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: Colors.text,
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: '600',
   },
   labelFocused: {

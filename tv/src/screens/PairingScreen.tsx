@@ -3,12 +3,11 @@ import {View, Text, StyleSheet, BackHandler} from 'react-native';
 import {useSessionContext} from '../session/SessionContext';
 import {FocusButton} from '../components/FocusButton';
 import {QRCode} from '../components/QRCode';
+import {ScaledStage} from '../components/ScaledStage';
 import {PHONE_URL} from '../config';
 import {Colors, Layout} from '../theme';
 import {CLIPS} from '../data/clips';
 import type {ClipId} from '../session/types';
-
-const CODE_LIFETIME_S = 300;
 
 interface PairingScreenProps {
   onStart: (clipId: ClipId) => void;
@@ -16,9 +15,16 @@ interface PairingScreenProps {
 
 export const PairingScreen: React.FC<PairingScreenProps> = ({onStart}) => {
   const {client, sessionState} = useSessionContext();
-  const [countdown, setCountdown] = useState(CODE_LIFETIME_S);
+  const [countdown, setCountdown] = useState(600);
   const [selectedClip, setSelectedClip] = useState<ClipId>('night');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Seed countdown from server-provided expiresAt when session first arrives
+  useEffect(() => {
+    if (!sessionState?.expiresAt) { return; }
+    const remaining = Math.max(0, Math.round((sessionState.expiresAt - Date.now()) / 1_000));
+    setCountdown(remaining);
+  }, [sessionState?.expiresAt]);
 
   useEffect(() => {
     timerRef.current = setInterval(() => {
@@ -41,6 +47,7 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({onStart}) => {
     `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   return (
+    <ScaledStage>
     <View style={styles.root}>
       {/* Logo / headline */}
       <View style={styles.header}>
@@ -113,6 +120,7 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({onStart}) => {
         </View>
       </View>
     </View>
+    </ScaledStage>
   );
 };
 
@@ -126,33 +134,33 @@ const styles = StyleSheet.create({
   header: {marginBottom: 48},
   logo: {
     color: Colors.text,
-    fontSize: 52,
+    fontSize: 72,
     fontWeight: '900',
-    letterSpacing: -1,
+    letterSpacing: -2,
   },
   tagline: {
     color: Colors.muted,
-    fontSize: 26,
-    marginTop: 8,
+    fontSize: 28,
+    marginTop: 10,
   },
   body: {
     flex: 1,
     flexDirection: 'row',
-    gap: 80,
+    gap: 100,
   },
   left: {
-    width: 300,
+    width: 380,
     alignItems: 'center',
   },
   codeRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
+    gap: 16,
+    marginTop: 28,
   },
   codeBox: {
-    width: 60,
-    height: 72,
-    borderRadius: 12,
+    width: 76,
+    height: 88,
+    borderRadius: 14,
     backgroundColor: Colors.surface,
     borderWidth: 2,
     borderColor: Colors.accent,
@@ -161,26 +169,26 @@ const styles = StyleSheet.create({
   },
   codeChar: {
     color: Colors.accent,
-    fontSize: 36,
+    fontSize: 44,
     fontWeight: '800',
     letterSpacing: 2,
   },
   joinUrl: {
     color: Colors.muted,
-    fontSize: 16,
-    marginTop: 16,
+    fontSize: 20,
+    marginTop: 18,
     textAlign: 'center',
   },
   countdown: {
     color: Colors.muted,
-    fontSize: 18,
-    marginTop: 8,
+    fontSize: 22,
+    marginTop: 10,
   },
   statusPill: {
-    marginTop: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 24,
+    marginTop: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 28,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -190,31 +198,31 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: Colors.text,
-    fontSize: 18,
+    fontSize: 22,
   },
   right: {
     flex: 1,
   },
   sectionTitle: {
     color: Colors.text,
-    fontSize: 26,
+    fontSize: 32,
     fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   step: {
     color: Colors.muted,
-    fontSize: 22,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 42,
   },
   clipRow: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 40,
+    gap: 20,
+    marginBottom: 48,
   },
-  clipBtn: {minWidth: 180},
+  clipBtn: {minWidth: 220},
   actions: {
     flexDirection: 'row',
-    gap: 20,
+    gap: 24,
   },
-  actionBtn: {minWidth: 280},
+  actionBtn: {minWidth: 320},
 });

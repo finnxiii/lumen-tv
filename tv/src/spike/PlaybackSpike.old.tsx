@@ -9,11 +9,11 @@ import {
   type EventListener as W3CEventListener,
 } from '@amazon-devices/react-native-w3cmedia';
 
-const TUNNEL = 'https://strength-direction-maria-machine.trycloudflare.com';
+import {MEDIA_BASE_URL} from '../config';
 
 const SOURCES = [
-  {label: 'T',  name: 'test.mp4',  url: `${TUNNEL}/test.mp4`},
-  {label: 'T2', name: 'test2.mp4', url: `${TUNNEL}/test2.mp4`},
+  {label: 'T',  name: 'test.mp4',  url: `${MEDIA_BASE_URL}/test.mp4`},
+  {label: 'T2', name: 'test2.mp4', url: `${MEDIA_BASE_URL}/test2.mp4`},
 ] as const;
 
 type Source = {label: string; name: string; url: string};
