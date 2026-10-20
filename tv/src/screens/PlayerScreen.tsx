@@ -37,14 +37,6 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
   const [showControls, setShowControls] = useState(true);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Apply initial clip/mode once player is ready
-  useEffect(() => {
-    if (engine.state.ready) {
-      engine.setClipAndMode(initialClip, 'original');
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engine.state.ready]);
-
   const bumpControls = useCallback(() => {
     setShowControls(true);
     if (controlsTimerRef.current) { clearTimeout(controlsTimerRef.current); }
@@ -53,43 +45,36 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
 
   useEffect(() => {
     bumpControls();
-    return () => {
-      if (controlsTimerRef.current) { clearTimeout(controlsTimerRef.current); }
-    };
+    return () => { if (controlsTimerRef.current) { clearTimeout(controlsTimerRef.current); } };
   }, [bumpControls]);
 
-  // Subscribe to session events
+  // Settings from phone/session
   useEffect(() => {
     const unsub = onSettingsApply(p => {
-      engine.setClipAndMode(clip, p.mode as VariantId);
+      engine.load(clip, p.mode as VariantId);
     });
     return unsub;
   }, [clip, engine, onSettingsApply]);
 
+  // Playback commands from phone/session (no seek)
   useEffect(() => {
     const unsub = onPlaybackCommand(p => {
       if (p.action === 'play') { engine.play(); }
       else if (p.action === 'pause') { engine.pause(); }
-      else if (p.action === 'seek' && p.position !== undefined) {
-        engine.seekBy(p.position - engine.state.positionInSegment);
-      }
     });
     return unsub;
   }, [engine, onPlaybackCommand]);
 
-  // Sync overlay state from session
+  // Overlay from session
   useEffect(() => {
     if (activeOverlay) { setOverlay(activeOverlay); }
   }, [activeOverlay]);
 
-  // Remote key handler
+  // Remote keys — back only; play/pause handled by system
   useTVEventHandler((evt: HWEvent) => {
     if (evt.eventKeyAction !== 0) { return; }
     bumpControls();
-
-    // Cast to string so TypeScript does not complain about non-union keys
     const evtType: string = evt.eventType;
-
     if (evtType === 'back') {
       if (overlay) {
         setOverlay(null);
@@ -99,48 +84,32 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
       } else {
         setShowControls(true);
       }
-    } else if (evtType === 'rewind') {
-      console.log('[ui] remote rewind → seekBy(-10)');
-      engine.seekBy(-10);
-    } else if (evtType === 'fastforward' || evtType === 'fastForward') {
-      console.log('[ui] remote fastforward → seekBy(+10)');
-      engine.seekBy(10);
     }
-    // playpause: handled by system media controls — do not toggle here
   });
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (overlay) {
-        setOverlay(null);
-        setActiveOverlay(null);
-        return true;
-      }
-      if (showControls) {
-        onBack();
-        return true;
-      }
+      if (overlay) { setOverlay(null); setActiveOverlay(null); return true; }
+      if (showControls) { onBack(); return true; }
       setShowControls(true);
       return true;
     });
     return () => sub.remove();
   }, [overlay, showControls, onBack, setActiveOverlay]);
 
-  // Playback update to session (~2s)
+  // Playback update to session (~2 s)
   useEffect(() => {
     const tid = setInterval(() => {
-      client.sendPlaybackUpdate(clip, engine.state.positionInSegment, engine.state.playing);
+      client.sendPlaybackUpdate(clip, engine.state.positionInClip, engine.state.playing);
     }, 2_000);
     return () => clearInterval(tid);
-  }, [client, clip, engine.state.positionInSegment, engine.state.playing]);
+  }, [client, clip, engine.state.positionInClip, engine.state.playing]);
 
   const currentModeInfo = MODES.find(m => m.id === engine.state.mode);
   const modeColor = currentModeInfo?.color ?? Colors.muted;
   const modeLabel = currentModeInfo?.label ?? (engine.state.mode === 'original' ? 'Original' : engine.state.mode);
-  const progress = engine.state.positionInSegment / engine.state.segmentDuration;
+  const progress = engine.state.positionInClip / engine.state.clipDuration;
   const phoneConnected = sessionState?.phoneConnected ?? false;
-
-  // Use raw paused flag from debug poll — more reliable than event-driven state
   const isActuallyPaused = engine.state.debug.paused;
 
   const handleModeSelect = (mode: ModeId): void => {
@@ -151,7 +120,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
 
   const handleApplyRec = (): void => {
     if (!recommendation) { return; }
-    client.sendModeUpdate(recommendation.mode, 'tv');
+    engine.load(clip, recommendation.mode as VariantId);
     clearRecommendation();
     setOverlay(null);
     setActiveOverlay(null);
@@ -171,7 +140,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
 
   const handleKeepCompare = (): void => {
     if (recommendation) {
-      client.sendModeUpdate(recommendation.mode, 'tv');
+      engine.load(clip, recommendation.mode as VariantId);
       clearRecommendation();
     }
     setOverlay(null);
@@ -184,9 +153,9 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
   };
 
   const switchClip = (): void => {
-    const next = clip === 'night' ? 'day' : 'night';
-    setClip(next as ClipId);
-    engine.setClipAndMode(next as ClipId, engine.state.mode);
+    const next = (clip === 'night' ? 'day' : 'night') as ClipId;
+    setClip(next);
+    engine.load(next, engine.state.mode);
   };
 
   return (
@@ -218,74 +187,64 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
           </View>
         )}
 
-        {/* Loading / error overlay */}
-        {!engine.state.ready && (
+        {/* Loading / error */}
+        {!engine.state.ready && !engine.overlay.visible && (
           <View style={styles.loadingOverlay}>
-            <Text style={styles.loadingText}>
-              {engine.state.error ?? 'Loading…'}
-            </Text>
+            <Text style={styles.loadingText}>{engine.state.error ?? 'Loading…'}</Text>
           </View>
         )}
 
-        {/* Mode change full-screen overlay */}
-        {engine.modeOverlay.visible && (
-          <View style={styles.modeChangeOverlay}>
-            <Text style={styles.modeChangeText}>{engine.modeOverlay.text}</Text>
+        {/* Swap overlay */}
+        {engine.overlay.visible && (
+          <View style={styles.swapOverlay}>
+            <Text style={styles.swapText}>{engine.overlay.text}</Text>
           </View>
         )}
 
-        {/* Toast */}
-        {engine.toast.visible && (
-          <View style={styles.toast}>
-            <Text style={styles.toastText}>{engine.toast.text}</Text>
+        {/* Ended / Replay */}
+        {engine.state.ended && !engine.overlay.visible && (
+          <View style={styles.endedOverlay}>
+            <FocusButton
+              label="↩ Replay"
+              onPress={() => engine.load(clip, engine.state.mode)}
+              variant="primary"
+              style={styles.replayBtn}
+              hasTVPreferredFocus
+            />
           </View>
         )}
 
-        {/* Debug overlay — remove before ship */}
+        {/* Debug overlay */}
         <View style={styles.debugOverlay} pointerEvents="none">
           <Text style={styles.debugText}>
-            {`rs:${engine.state.debug.readyState} paused:${engine.state.debug.paused} t:${engine.state.debug.rawTime.toFixed(2)} seg:${engine.state.debug.segStart} ev:${engine.state.debug.lastEvent} surf:${engine.state.debug.hasSurface} intent:${engine.state.debug.intent} ret:${engine.state.debug.retries}`}
+            {`rs:${engine.state.debug.readyState} paused:${engine.state.debug.paused} t:${engine.state.positionInClip.toFixed(2)} ev:${engine.state.debug.lastEvent} surf:${engine.state.debug.hasSurface} swap:${engine.state.debug.swapCount}`}
           </Text>
         </View>
 
-        {/* Bottom controls bar */}
-        {showControls && !overlay && (
+        {/* Bottom controls */}
+        {showControls && !overlay && !engine.state.ended && (
           <View style={styles.bottomBar}>
             <View style={styles.barTop}>
               <Text style={styles.clipTitle}>
                 {CLIPS.find(c => c.id === clip)?.label ?? clip}
               </Text>
               <Text style={styles.timeText}>
-                {fmt(engine.state.positionInSegment)} / {fmt(engine.state.segmentDuration)}
+                {fmt(engine.state.positionInClip)} / {fmt(engine.state.clipDuration)}
               </Text>
             </View>
-            {/* Progress bar */}
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, {width: `${Math.min(100, progress * 100)}%`}]} />
             </View>
-            {/* Transport + action buttons */}
             <View style={styles.barButtons}>
               <View style={styles.transport}>
                 <FocusButton
-                  label="−10s"
-                  onPress={() => { console.log('[ui] press -10s'); engine.seekBy(-10); }}
-                  variant="ghost"
-                  style={styles.transportBtn}
-                />
-                <FocusButton
                   label={isActuallyPaused ? '▶' : '⏸'}
                   onPress={() => {
-                    console.log('[ui] press play/pause paused=', isActuallyPaused);
+                    console.log('[ui] play/pause paused=', isActuallyPaused);
                     if (isActuallyPaused) { engine.play(); } else { engine.pause(); }
                   }}
                   variant="primary"
                   style={styles.playBtn}
-                />
-                <FocusButton
-                  label="+10s"
-                  onPress={() => { console.log('[ui] press +10s'); engine.seekBy(10); }}
-                  variant="ghost"
-                  style={styles.transportBtn}
                 />
               </View>
               <View style={styles.actionBtns}>
@@ -297,7 +256,12 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
                   variant="secondary"
                   style={styles.actionBtn}
                 />
-                <FocusButton label="Compare" onPress={() => recommendation ? setOverlay('compare') : undefined} variant="secondary" style={styles.actionBtn} />
+                <FocusButton
+                  label="Compare"
+                  onPress={() => { if (recommendation) { setOverlay('compare'); } }}
+                  variant="secondary"
+                  style={styles.actionBtn}
+                />
               </View>
             </View>
           </View>
@@ -337,10 +301,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
 };
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
+  root: {flex: 1, backgroundColor: 'transparent'},
   modePill: {
     position: 'absolute',
     top: Layout.safeV,
@@ -388,32 +349,32 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   loadingText: {color: Colors.muted, fontSize: 28},
-  modeChangeOverlay: {
+  swapOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(7,9,13,0.75)',
+    backgroundColor: 'rgba(7,9,13,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 25,
   },
-  modeChangeText: {
-    color: Colors.text,
-    fontSize: 48,
-    fontWeight: '300',
-    letterSpacing: 1,
+  swapText: {color: Colors.text, fontSize: 48, fontWeight: '300', letterSpacing: 1},
+  endedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(7,9,13,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
   },
-  toast: {
-    position: 'absolute',
-    bottom: 200,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 32,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    zIndex: 26,
+  replayBtn: {width: 280, height: 72},
+  debugOverlay: {position: 'absolute', bottom: 8, left: 8, zIndex: 99},
+  debugText: {
+    color: '#0f0',
+    fontSize: 14,
+    fontFamily: 'monospace',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  toastText: {color: Colors.text, fontSize: 24},
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -425,11 +386,7 @@ const styles = StyleSheet.create({
     paddingBottom: Layout.safeV,
     zIndex: 10,
   },
-  barTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
+  barTop: {flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12},
   clipTitle: {color: Colors.text, fontSize: 22, fontWeight: '600'},
   timeText: {color: Colors.muted, fontSize: 22},
   progressTrack: {
@@ -438,34 +395,10 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginBottom: 20,
   },
-  progressFill: {
-    height: 4,
-    backgroundColor: Colors.accent,
-    borderRadius: 2,
-  },
-  barButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  progressFill: {height: 4, backgroundColor: Colors.accent, borderRadius: 2},
+  barButtons: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
   transport: {flexDirection: 'row', gap: 16, alignItems: 'center'},
-  transportBtn: {minWidth: 100},
   playBtn: {width: 72, height: 56},
   actionBtns: {flexDirection: 'row', gap: 16},
   actionBtn: {minWidth: 160},
-  debugOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    zIndex: 99,
-  },
-  debugText: {
-    color: '#0f0',
-    fontSize: 14,
-    fontFamily: 'monospace',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
 });
