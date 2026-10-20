@@ -28,7 +28,7 @@ export const ModesOverlay: React.FC<ModesOverlayProps> = ({currentMode, onSelect
                 onPress={() => onSelect(mode.id)}
                 onFocus={() => setFocused(mode.id)}
                 onBlur={() => setFocused(null)}
-                hasTVPreferredFocus={mode.id === 'cinema'}
+                hasTVPreferredFocus={mode.id === currentMode || (currentMode === 'original' && mode.id === 'cinema')}
                 accessibilityRole="button"
                 style={[
                   styles.card,

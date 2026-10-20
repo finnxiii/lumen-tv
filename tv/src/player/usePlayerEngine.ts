@@ -86,6 +86,7 @@ export interface PlayerEngine {
   load: (clip: ClipId, mode: VariantId) => void;
   play: () => void;
   pause: () => void;
+  seekBy: (seconds: number) => void;
   overlay: {visible: boolean; text: string};
 }
 
@@ -111,6 +112,7 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
   const surfaceReadyRef  = useRef<(() => void) | null>(null);
   const swapCountRef     = useRef(0);
   const isSwappingRef    = useRef(false);
+  const pauseStartRef    = useRef<number | null>(null);
   const pendingRef       = useRef<{clip: ClipId; mode: VariantId} | null>(null);
   const lastEventRef     = useRef('none');
   const listenerCleanupRef = useRef<() => void>(() => {});
@@ -150,10 +152,11 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
 
       const modeInfo = MODES.find(m => m.id === mode);
       const label = modeInfo?.label ?? (mode === 'original' ? 'Original' : mode);
-      const isFirst = swapCountRef.current === 0;
 
-      setOverlay({visible: true, text: isFirst ? 'Loading…' : `Applying ${label} mode…`});
+      setOverlay({visible: true, text: `Previewing ${label} from the start of the scene…`});
       setState(s => ({...s, ended: false, error: null}));
+
+      const isFirst = swapCountRef.current === 0;
 
       const run = async (): Promise<void> => {
         // ── Teardown previous player (skip on first load) ────────────────────
@@ -202,10 +205,12 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
         // ── Attach listeners ──────────────────────────────────────────────────
         const onPlaying: W3CEventListener = () => {
           lastEventRef.current = 'playing';
+          pauseStartRef.current = null;
           if (!cancelled) { setState(s => ({...s, playing: true})); }
         };
         const onPause: W3CEventListener = () => {
           lastEventRef.current = 'pause';
+          pauseStartRef.current = Date.now();
           if (!cancelled) { setState(s => ({...s, playing: false})); }
         };
         const onEnded: W3CEventListener = () => {
@@ -315,11 +320,45 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
   }, []);
 
   const play = useCallback(() => {
-    playerRef.current.play().catch(() => {});
+    const p = playerRef.current;
+    const pausedAt = pauseStartRef.current;
+    if (pausedAt === null || Date.now() - pausedAt <= 10_000) {
+      p.play().catch(() => {});
+      return;
+    }
+    // Long pause (>10 s): show full-screen "Resuming…" until playing + ~1 s advance
+    setOverlay({visible: true, text: 'Resuming…'});
+    p.play().catch(() => {});
+    const startTime = p.currentTime ?? 0;
+    const deadline = Date.now() + 4_000;
+    const check = (): void => {
+      if ((p.currentTime ?? 0) - startTime >= 1.0 || Date.now() > deadline) {
+        setOverlay({visible: false, text: ''});
+        return;
+      }
+      setTimeout(check, 200);
+    };
+    waitForEvent(p, 'playing', 3_000)
+      .catch(() => {})
+      .then(() => setTimeout(check, 200));
   }, []);
 
   const pause = useCallback(() => {
     playerRef.current.pause();
+  }, []);
+
+  // Single seek: pause if playing → set time → wait seeked (2 s) → re-play.
+  // Behind ENABLE_SEEK flag in config.ts; not called when flag is false.
+  const seekBy = useCallback((seconds: number) => {
+    if (isSwappingRef.current) { return; }
+    const player = playerRef.current;
+    const wasPaused = (player as {paused?: boolean}).paused ?? true;
+    if (!wasPaused) { player.pause(); }
+    const target = Math.max(0, (player.currentTime ?? 0) + seconds);
+    player.currentTime = target;
+    waitForEvent(player, 'seeked', 2_000)
+      .catch(() => {})
+      .then(() => { if (!wasPaused) { player.play().catch(() => {}); } });
   }, []);
 
   return {
@@ -331,6 +370,7 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
     load,
     play,
     pause,
+    seekBy,
     overlay,
   };
 }

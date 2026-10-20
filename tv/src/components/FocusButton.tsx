@@ -1,10 +1,12 @@
 import React, {useState} from 'react';
-import {Pressable, Text, StyleSheet, type StyleProp, type ViewStyle, type TextStyle} from 'react-native';
+import {Pressable, Text, View, StyleSheet, type StyleProp, type ViewStyle, type TextStyle} from 'react-native';
 import {Colors} from '../theme';
 
 interface FocusButtonProps {
-  label: string;
+  label?: string;
+  icon?: React.ReactNode;
   onPress: () => void;
+  onFocus?: () => void;
   hasTVPreferredFocus?: boolean;
   style?: StyleProp<ViewStyle>;
   labelStyle?: StyleProp<TextStyle>;
@@ -14,7 +16,9 @@ interface FocusButtonProps {
 
 export const FocusButton: React.FC<FocusButtonProps> = ({
   label,
+  icon,
   onPress,
+  onFocus: onFocusProp,
   hasTVPreferredFocus,
   style,
   labelStyle,
@@ -26,7 +30,7 @@ export const FocusButton: React.FC<FocusButtonProps> = ({
   return (
     <Pressable
       onPress={onPress}
-      onFocus={() => setFocused(true)}
+      onFocus={() => { setFocused(true); onFocusProp?.(); }}
       onBlur={() => setFocused(false)}
       hasTVPreferredFocus={hasTVPreferredFocus}
       testID={testID}
@@ -39,9 +43,16 @@ export const FocusButton: React.FC<FocusButtonProps> = ({
         focused && styles.focused,
         style,
       ]}>
-      <Text style={[styles.label, focused && styles.labelFocused, labelStyle]}>
-        {label}
-      </Text>
+      {icon && label ? (
+        <View style={styles.iconRow}>
+          {icon}
+          <Text style={[styles.label, focused && styles.labelFocused, labelStyle]}>{label}</Text>
+        </View>
+      ) : icon ? (
+        icon
+      ) : (
+        <Text style={[styles.label, focused && styles.labelFocused, labelStyle]}>{label ?? ''}</Text>
+      )}
     </Pressable>
   );
 };
@@ -69,6 +80,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.focusRing,
     transform: [{scale: 1.04}],
+  },
+  iconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   label: {
     color: Colors.text,

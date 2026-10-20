@@ -18,8 +18,8 @@ set -euo pipefail
 
 MEDIA_DIR="$HOME/lumen-media"
 SOURCE_DIR="$MEDIA_DIR/source"
-CLIP_S=45         # seconds per clip
-FRAME_T=22        # timestamp for the preview frame (≈midpoint)
+CLIP_S=25         # seconds per clip (trimmed to the strongest scene segment)
+FRAME_T=12        # timestamp for the preview frame (≈midpoint of 25 s clip)
 
 # Encode target — light profile for the Virtual Device software decoder
 # 960x540, H.264 Main L3.1, 1.5 Mbps (max 2 Mbps), 24 fps, AAC 128k 48 kHz

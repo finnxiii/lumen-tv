@@ -5,12 +5,17 @@ import {useTVEventHandler, type HWEvent} from '@amazon-devices/react-native-kepl
 import type {PlayerEngine} from '../player/usePlayerEngine';
 import {useSessionContext} from '../session/SessionContext';
 import {FocusButton} from '../components/FocusButton';
+import {
+  PlayIcon, PauseIcon, ReplayIcon,
+  ModesIcon, SparkleIcon, CompareIcon, FilmIcon,
+} from '../components/icons';
 import {ModesOverlay} from './overlays/ModesOverlay';
 import {AssistantOverlay} from './overlays/AssistantOverlay';
 import {CompareOverlay} from './overlays/CompareOverlay';
 import {MODES} from '../data/modes';
 import {CLIPS} from '../data/clips';
 import {Colors, Layout} from '../theme';
+import {ENABLE_SEEK} from '../config';
 import type {ModeId, VariantId, ClipId} from '../session/types';
 
 const CONTROLS_TIMEOUT_MS = 6_000;
@@ -35,6 +40,7 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
   const [clip, setClip] = useState<ClipId>(initialClip);
   const [overlay, setOverlay] = useState<OverlayType>(null);
   const [showControls, setShowControls] = useState(true);
+  const [lastFocusedBtn, setLastFocusedBtn] = useState<'play' | 'clip' | 'modes' | 'assistant' | 'compare'>('modes');
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bumpControls = useCallback(() => {
@@ -84,6 +90,10 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
       } else {
         setShowControls(true);
       }
+    } else if (ENABLE_SEEK && evtType === 'rewind') {
+      engine.seekBy(-10);
+    } else if (ENABLE_SEEK && (evtType === 'fastforward' || evtType === 'fastForward')) {
+      engine.seekBy(10);
     }
   });
 
@@ -205,7 +215,8 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
         {engine.state.ended && !engine.overlay.visible && (
           <View style={styles.endedOverlay}>
             <FocusButton
-              label="↩ Replay"
+              icon={<ReplayIcon size={36} color="#fff" />}
+              label="Replay"
               onPress={() => engine.load(clip, engine.state.mode)}
               variant="primary"
               style={styles.replayBtn}
@@ -237,30 +248,80 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
             </View>
             <View style={styles.barButtons}>
               <View style={styles.transport}>
+                {ENABLE_SEEK && (
+                  <FocusButton
+                    icon={<SeekBackIcon />}
+                    label="−10s"
+                    onPress={() => engine.seekBy(-10)}
+                    variant="ghost"
+                    style={styles.seekBtn}
+                    labelStyle={styles.seekLabel}
+                  />
+                )}
                 <FocusButton
-                  label={isActuallyPaused ? '▶' : '⏸'}
+                  icon={isActuallyPaused
+                    ? <PlayIcon size={34} color="#fff" />
+                    : <PauseIcon size={34} color="#fff" />}
                   onPress={() => {
                     console.log('[ui] play/pause paused=', isActuallyPaused);
                     if (isActuallyPaused) { engine.play(); } else { engine.pause(); }
                   }}
+                  onFocus={() => setLastFocusedBtn('play')}
+                  hasTVPreferredFocus={lastFocusedBtn === 'play'}
                   variant="primary"
                   style={styles.playBtn}
                 />
+                {ENABLE_SEEK && (
+                  <FocusButton
+                    icon={<SeekFwdIcon />}
+                    label="+10s"
+                    onPress={() => engine.seekBy(10)}
+                    variant="ghost"
+                    style={styles.seekBtn}
+                    labelStyle={styles.seekLabel}
+                  />
+                )}
               </View>
               <View style={styles.actionBtns}>
-                <FocusButton label="Clip" onPress={switchClip} variant="secondary" style={styles.actionBtn} />
-                <FocusButton label="Viewing modes" onPress={() => setOverlay('modes')} variant="secondary" hasTVPreferredFocus style={styles.actionBtn} />
                 <FocusButton
-                  label={recommendation ? '✦ Assistant' : 'Assistant'}
-                  onPress={() => setOverlay('assistant')}
+                  icon={<FilmIcon size={28} color="#fff" />}
+                  label="Clip"
+                  onPress={switchClip}
+                  onFocus={() => setLastFocusedBtn('clip')}
+                  hasTVPreferredFocus={lastFocusedBtn === 'clip'}
                   variant="secondary"
                   style={styles.actionBtn}
+                  labelStyle={styles.actionLabel}
                 />
                 <FocusButton
-                  label="Compare"
-                  onPress={() => { if (recommendation) { setOverlay('compare'); } }}
+                  icon={<ModesIcon size={28} color="#fff" />}
+                  label="Modes"
+                  onPress={() => setOverlay('modes')}
+                  onFocus={() => setLastFocusedBtn('modes')}
+                  hasTVPreferredFocus={lastFocusedBtn === 'modes'}
                   variant="secondary"
                   style={styles.actionBtn}
+                  labelStyle={styles.actionLabel}
+                />
+                <FocusButton
+                  icon={<SparkleIcon size={28} color={recommendation ? Colors.accent : '#fff'} />}
+                  label="Assistant"
+                  onPress={() => setOverlay('assistant')}
+                  onFocus={() => setLastFocusedBtn('assistant')}
+                  hasTVPreferredFocus={lastFocusedBtn === 'assistant'}
+                  variant="secondary"
+                  style={styles.actionBtn}
+                  labelStyle={styles.actionLabel}
+                />
+                <FocusButton
+                  icon={<CompareIcon size={28} color="#fff" />}
+                  label="Compare"
+                  onPress={() => { if (recommendation) { setOverlay('compare'); } }}
+                  onFocus={() => setLastFocusedBtn('compare')}
+                  hasTVPreferredFocus={lastFocusedBtn === 'compare'}
+                  variant="secondary"
+                  style={styles.actionBtn}
+                  labelStyle={styles.actionLabel}
                 />
               </View>
             </View>
@@ -299,6 +360,33 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
     </View>
   );
 };
+
+// ── Seek icons: simple double-chevron arrows ────────────────────────────────
+const Chevron: React.FC<{left?: boolean; color?: string}> = ({left = false, color = '#fff'}) => {
+  const S = 12;
+  return (
+    <View style={{width: 0, height: 0,
+      borderTopWidth: S, borderBottomWidth: S,
+      borderLeftWidth: left ? 0 : S * 1.6,
+      borderRightWidth: left ? S * 1.6 : 0,
+      borderTopColor: 'transparent', borderBottomColor: 'transparent',
+      borderLeftColor: left ? 'transparent' : color,
+      borderRightColor: left ? color : 'transparent',
+    }} />
+  );
+};
+const SeekBackIcon: React.FC = () => (
+  <View style={{flexDirection: 'row', gap: 2}}>
+    <Chevron left color="#fff" />
+    <Chevron left color="#fff" />
+  </View>
+);
+const SeekFwdIcon: React.FC = () => (
+  <View style={{flexDirection: 'row', gap: 2}}>
+    <Chevron color="#fff" />
+    <Chevron color="#fff" />
+  </View>
+);
 
 const styles = StyleSheet.create({
   root: {flex: 1, backgroundColor: 'transparent'},
@@ -399,6 +487,9 @@ const styles = StyleSheet.create({
   barButtons: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
   transport: {flexDirection: 'row', gap: 16, alignItems: 'center'},
   playBtn: {width: 72, height: 56},
+  seekBtn: {minWidth: 100, height: 56},
+  seekLabel: {fontSize: 20},
   actionBtns: {flexDirection: 'row', gap: 16},
   actionBtn: {minWidth: 160},
+  actionLabel: {fontSize: 22},
 });
