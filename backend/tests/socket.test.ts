@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
 import type { AddressInfo } from "node:net";
 import { Server } from "socket.io";
 import { io as connect, type Socket } from "socket.io-client";
@@ -6,6 +7,7 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
 import { PRESETS } from "../src/engine.js";
+import { loadScenes } from "../src/scenes.js";
 import { createSession, getSession, type SessionState } from "../src/sessions.js";
 import { attachSocketHandlers } from "../src/socket.js";
 
@@ -15,6 +17,8 @@ let url: string;
 const clients: Socket[] = [];
 
 beforeAll(async () => {
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  loadScenes(fileURLToPath(new URL("./fixtures/scenes", import.meta.url)));
   io = new Server();
   app = createApp(io);
   const server = createServer(app);
@@ -134,6 +138,32 @@ describe("socket", () => {
     tv.emit("playback:update", { clipId: "day", position: 12.5, playing: true });
     await state;
     expect(getSession(code)?.playback).toEqual({ position: 12.5, playing: true });
+  });
+
+  it("TV playback sends scene:insights when the sample changes", async () => {
+    const { code, tv, phone } = await pair();
+    const first = next<{ timestamp: number }>(phone, "scene:insights");
+    tv.emit("playback:update", { clipId: "testclip", position: 0.5, playing: true });
+    expect((await first).timestamp).toBe(0);
+
+    const cut = next<{ sceneChange: boolean }>(phone, "scene:insights");
+    tv.emit("playback:update", { clipId: "testclip", position: 0.9, playing: true }); // same sample: no event
+    tv.emit("playback:update", { clipId: "testclip", position: 2.1, playing: true });
+    expect(await cut).toMatchObject({ sceneChange: true, label: "Very bright scene" });
+    expect(getSession(code)?.scene?.timestamp).toBe(2);
+  });
+
+  it("dark scene starting → unprompted ai:recommendation the TV can accept", async () => {
+    const { code, tv } = await pair();
+    const suggested = next<{ id: string; mode: string }>(tv, "ai:recommendation");
+    tv.emit("playback:update", { clipId: "testclip", position: 0, playing: true });
+    const rec = await suggested;
+    expect(rec.mode).toBe("bright");
+    expect(getSession(code)?.pending?.id).toBe(rec.id);
+
+    const applied = next(tv, "settings:apply");
+    tv.emit("recommendation:respond", { id: rec.id, accepted: true });
+    expect(await applied).toMatchObject({ mode: "bright", source: "ai" });
   });
 
   it("applies an accepted recommendation", async () => {
