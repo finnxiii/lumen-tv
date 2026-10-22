@@ -1,0 +1,28 @@
+module.exports = {
+  plugins: ['@typescript-eslint', '@amazon-devices/eslint-plugin-kepler'],
+  extends: [
+    '@react-native',
+    'eslint:recommended',
+    'plugin:@amazon-devices/eslint-plugin-kepler/kepler',
+  ],
+  overrides: [
+    {
+      files: ['**/*.ts', '**/*.tsx'],
+      parser: '@typescript-eslint/parser',
+      parserOptions: {
+        project: './tsconfig.json',
+        tsconfigRootDir: __dirname,
+      },
+    },
+    {
+      files: ['package.json', 'kepler-compatibility.json'],
+      parser: 'jsonc-eslint-parser',
+    },
+  ],
+  ignorePatterns: [
+    'babel.config.js',
+    'metro.config.js',
+    'jest.config.js',
+    'package-lock.json',
+  ],
+};

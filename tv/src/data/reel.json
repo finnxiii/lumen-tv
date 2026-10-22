@@ -1,0 +1,15 @@
+{
+  "segmentSeconds": 45,
+  "order": [
+    { "clip": "night", "variant": "original", "start": 0 },
+    { "clip": "night", "variant": "cinema",   "start": 45 },
+    { "clip": "night", "variant": "night",    "start": 90 },
+    { "clip": "night", "variant": "bright",   "start": 135 },
+    { "clip": "night", "variant": "sports",   "start": 180 },
+    { "clip": "day",   "variant": "original", "start": 225 },
+    { "clip": "day",   "variant": "cinema",   "start": 270 },
+    { "clip": "day",   "variant": "night",    "start": 315 },
+    { "clip": "day",   "variant": "bright",   "start": 360 },
+    { "clip": "day",   "variant": "sports",   "start": 405 }
+  ]
+}
