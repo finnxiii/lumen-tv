@@ -44,3 +44,9 @@ media/
 CLAUDE.md
 CLAUDE.local.md
 .claude/
+
+node_modules/
+dist/
+coverage/
+.env
+.DS_Store
