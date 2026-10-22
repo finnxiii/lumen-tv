@@ -1,26 +1,15 @@
-import cors from "cors";
-import express, { type Request, type Response } from "express";
 import { Server } from "socket.io";
+import { createApp } from "./app.js";
+import { sweepExpired } from "./sessions.js";
 
-const app = express();
 // 4000 is the TV app's default SOCKET_URL port
 const PORT = process.env.PORT || 4000;
 
-// shortcut: any origin allowed, lock to the phone site's URL once it's hosted
-app.use(cors());
-app.use(express.json());
-
-app.get("/", (req: Request, res: Response) => {
-  res.json({ message: "Hello from TypeScript + Express!" });
-});
-
-app.get("/health", (req: Request, res: Response) => {
-  res.json({ status: "OK" });
-});
-
-const server = app.listen(PORT, () => {
+const server = createApp().listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
+
+setInterval(sweepExpired, 60_000).unref();
 
 const io = new Server(server, { cors: { origin: "*" } });
 
