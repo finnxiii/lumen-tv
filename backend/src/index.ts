@@ -1,32 +1,20 @@
-import cors from "cors";
-import express, { type Request, type Response } from "express";
+import "dotenv/config";
+import { createServer } from "node:http";
 import { Server } from "socket.io";
+import { createApp } from "./app.js";
+import { sweepExpired } from "./sessions.js";
+import { attachSocketHandlers } from "./socket.js";
 
-const app = express();
 // 4000 is the TV app's default SOCKET_URL port
 const PORT = process.env.PORT || 4000;
 
-// shortcut: any origin allowed, lock to the phone site's URL once it's hosted
-app.use(cors());
-app.use(express.json());
+const io = new Server({ cors: { origin: "*" } });
+const server = createServer(createApp(io));
+io.attach(server);
+attachSocketHandlers(io);
 
-app.get("/", (req: Request, res: Response) => {
-  res.json({ message: "Hello from TypeScript + Express!" });
-});
-
-app.get("/health", (req: Request, res: Response) => {
-  res.json({ status: "OK" });
-});
-
-const server = app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-const io = new Server(server, { cors: { origin: "*" } });
-
-io.on("connection", (socket) => {
-  console.log("a user connected");
-  socket.on("disconnect", () => {
-    console.log("user disconnected");
-  });
-});
+setInterval(sweepExpired, 60_000).unref();
