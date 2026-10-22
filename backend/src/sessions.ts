@@ -20,6 +20,35 @@ export interface SessionState {
   expiresAt: number;
 }
 
+export type RoomLight = SessionState["roomLight"];
+export type Source = "phone" | "ai" | "tv" | "undo";
+
+export interface Recommendation {
+  id: string;
+  request?: string;
+  mode: ModeId;
+  title: string;
+  settings: PictureSettings;
+  reasons: { label: string; value: string }[];
+  explanation: string;
+}
+
+// shortcut: contract leaves these types open; 0..100 sliders assumed, confirm with NLH
+export interface Preferences {
+  style?: string | undefined;
+  shadowDetail?: number | undefined;
+  colourIntensity?: number | undefined;
+}
+
+export interface Session {
+  state: SessionState;
+  preferences: Preferences;
+  /** Previous {mode, settings} for undo, newest last. */
+  history: Pick<SessionState, "mode" | "settings">[];
+  pending: Recommendation | undefined;
+  playback: { position: number; playing: boolean } | undefined;
+}
+
 // No 0/O/1/I so codes can't be misread off the TV screen.
 export const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4}$/;
@@ -34,7 +63,7 @@ const ZERO_SETTINGS: PictureSettings = {
   sharpness: 0,
 };
 
-const sessions = new Map<string, SessionState>();
+const sessions = new Map<string, Session>();
 
 function newCode(): string {
   let code: string;
@@ -47,7 +76,7 @@ function newCode(): string {
   return code;
 }
 
-export function createSession(now = Date.now()): SessionState {
+export function createSession(now = Date.now()): Session {
   const state: SessionState = {
     code: newCode(),
     phoneConnected: false,
@@ -57,24 +86,31 @@ export function createSession(now = Date.now()): SessionState {
     roomLight: "dim",
     expiresAt: now + SESSION_TTL_MS,
   };
-  sessions.set(state.code, state);
-  return state;
+  const session: Session = {
+    state,
+    preferences: {},
+    history: [],
+    pending: undefined,
+    playback: undefined,
+  };
+  sessions.set(state.code, session);
+  return session;
 }
 
 /** Returns the live session and extends its expiry, or undefined if it's unknown or expired. */
-export function getSession(code: string, now = Date.now()): SessionState | undefined {
-  const state = sessions.get(code.toUpperCase());
-  if (!state) return undefined;
-  if (state.expiresAt <= now) {
-    sessions.delete(state.code);
+export function getSession(code: string, now = Date.now()): Session | undefined {
+  const session = sessions.get(code.toUpperCase());
+  if (!session) return undefined;
+  if (session.state.expiresAt <= now) {
+    sessions.delete(session.state.code);
     return undefined;
   }
-  state.expiresAt = now + SESSION_TTL_MS;
-  return state;
+  session.state.expiresAt = now + SESSION_TTL_MS;
+  return session;
 }
 
 export function sweepExpired(now = Date.now()): void {
-  for (const [code, state] of sessions) {
-    if (state.expiresAt <= now) sessions.delete(code);
+  for (const [code, session] of sessions) {
+    if (session.state.expiresAt <= now) sessions.delete(code);
   }
 }

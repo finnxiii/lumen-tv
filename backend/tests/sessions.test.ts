@@ -1,3 +1,4 @@
+import { Server } from "socket.io";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
@@ -12,18 +13,18 @@ import {
 describe("sessions", () => {
   it("creates 4-char codes without 0/O/1/I", () => {
     for (let i = 0; i < 200; i++) {
-      expect(createSession().code).toMatch(CODE_PATTERN);
+      expect(createSession().state.code).toMatch(CODE_PATTERN);
     }
   });
 
   it("finds a session case-insensitively", () => {
-    const { code } = createSession();
-    expect(getSession(code.toLowerCase())?.code).toBe(code);
+    const { code } = createSession().state;
+    expect(getSession(code.toLowerCase())?.state.code).toBe(code);
   });
 
   it("expires after the TTL and extends on access", () => {
     const t0 = 1_000_000;
-    const { code } = createSession(t0);
+    const { code } = createSession(t0).state;
     // access just before expiry pushes it out another TTL
     expect(getSession(code, t0 + SESSION_TTL_MS - 1)).toBeDefined();
     expect(getSession(code, t0 + 2 * SESSION_TTL_MS - 2)).toBeDefined();
@@ -31,14 +32,14 @@ describe("sessions", () => {
   });
 
   it("sweep removes expired sessions", () => {
-    const { code } = createSession(0);
+    const { code } = createSession(0).state;
     sweepExpired(SESSION_TTL_MS);
     expect(getSession(code, 0)).toBeUndefined();
   });
 });
 
 describe("REST", () => {
-  const app = createApp();
+  const app = createApp(new Server());
 
   it("create → join → get", async () => {
     const created = await request(app).post("/api/sessions").expect(201);
