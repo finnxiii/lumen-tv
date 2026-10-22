@@ -21,5 +21,7 @@ An AI-powered viewing assistant for Amazon Vega OS that personalises the TV expe
 
 ## References
 
-- [docs/tv-architecture.md](docs/tv-architecture.md) — TV app design: screens, navigation, data flow, design tokens
+- [tv/README.md](tv/README.md) — TV app: setup, media pipeline, config, build, troubleshooting
+- [docs/tv-architecture.md](docs/tv-architecture.md) — TV app design: screens, player, swap sequence, Vega constraints
+- [docs/tv-integration.md](docs/tv-integration.md) — Backend/phone integration: REST, Socket.IO events, payloads, testing
 - [shared/contract.md](shared/contract.md) — REST endpoints and Socket.IO event contract
