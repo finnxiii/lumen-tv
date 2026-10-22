@@ -1,9 +1,13 @@
+import cors from "cors";
 import express, { type Request, type Response } from "express";
 import { Server } from "socket.io";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// 4000 is the TV app's default SOCKET_URL port
+const PORT = process.env.PORT || 4000;
 
+// shortcut: any origin allowed, lock to the phone site's URL once it's hosted
+app.use(cors());
 app.use(express.json());
 
 app.get("/", (req: Request, res: Response) => {
@@ -18,7 +22,7 @@ const server = app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-const io = new Server(server);
+const io = new Server(server, { cors: { origin: "*" } });
 
 io.on("connection", (socket) => {
   console.log("a user connected");
