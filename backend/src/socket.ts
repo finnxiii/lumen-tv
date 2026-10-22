@@ -1,7 +1,10 @@
 import type { Server, Socket } from "socket.io";
 import { z } from "zod";
+import { suggestForScene } from "./ai.js";
 import { computeSettings } from "./engine.js";
+import { sceneAt } from "./scenes.js";
 import {
+  modeSchema,
   CODE_PATTERN,
   getSession,
   type ModeId,
@@ -12,7 +15,6 @@ import {
 
 const MAX_HISTORY = 20;
 
-export const modeSchema = z.enum(["cinema", "night", "bright", "sports"]);
 const roleSchema = z.enum(["tv", "phone"]);
 type Role = z.infer<typeof roleSchema>;
 
@@ -68,7 +70,8 @@ function pushHistory(session: Session): void {
 export function changeMode(io: Server, session: Session, mode: ModeId, source: Source): void {
   pushHistory(session);
   const { roomLight } = session.state;
-  const { settings } = computeSettings({ mode, roomLight, preferences: session.preferences });
+  const { preferences, scene } = session;
+  const { settings } = computeSettings({ mode, roomLight, preferences, scene });
   apply(io, session, mode, settings, source);
 }
 
@@ -145,6 +148,18 @@ export function attachSocketHandlers(io: Server): void {
       if (clipId !== session.state.clipId) {
         session.state.clipId = clipId;
         io.to(code).emit("session:state", session.state);
+      }
+      // Samples are 1 s apart and updates ~2 s, so this fires about once per update while playing.
+      const scene = sceneAt(clipId, position);
+      if (scene !== session.scene) {
+        const prevLabel = session.scene?.label;
+        session.scene = scene;
+        if (scene) io.to(code).emit("scene:insights", scene);
+        const rec = scene && scene.label !== prevLabel ? suggestForScene(session) : undefined;
+        if (rec) {
+          session.pending = rec;
+          io.to(code).emit("ai:recommendation", rec);
+        }
       }
     });
 

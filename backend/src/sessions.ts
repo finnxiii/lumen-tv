@@ -1,7 +1,10 @@
+import { z } from "zod";
 import { computeSettings } from "./engine.js";
+import type { SceneInsights } from "./scenes.js";
 
 // Types mirror shared/contract.md. Keep them in sync.
-export type ModeId = "cinema" | "night" | "bright" | "sports";
+export const modeSchema = z.enum(["cinema", "night", "bright", "sports"]);
+export type ModeId = z.infer<typeof modeSchema>;
 
 export interface PictureSettings {
   brightness: number;
@@ -51,6 +54,10 @@ export interface Session {
   playback: { position: number; playing: boolean } | undefined;
   /** Last /api/ai/recommend time, for the per-session cooldown. */
   lastAiAt: number;
+  /** Last unprompted scene suggestion, for its cooldown. */
+  lastSuggestAt: number;
+  /** Scene at the TV's current playback position, if ai/scenes has data for the clip. */
+  scene: SceneInsights | undefined;
 }
 
 // No 0/O/1/I so codes can't be misread off the TV screen.
@@ -88,6 +95,8 @@ export function createSession(now = Date.now()): Session {
     pending: undefined,
     playback: undefined,
     lastAiAt: 0,
+    lastSuggestAt: 0,
+    scene: undefined,
   };
   sessions.set(state.code, session);
   return session;

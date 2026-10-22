@@ -1,0 +1,29 @@
+[
+  {
+    "clipId": "testclip",
+    "timestamp": 0,
+    "brightness": 0.1,
+    "contrast": 0.2,
+    "saturation": 0.3,
+    "sceneChange": false,
+    "label": "Dark scene"
+  },
+  {
+    "clipId": "testclip",
+    "timestamp": 1,
+    "brightness": 0.12,
+    "contrast": 0.2,
+    "saturation": 0.3,
+    "sceneChange": false,
+    "label": "Dark scene"
+  },
+  {
+    "clipId": "testclip",
+    "timestamp": 2,
+    "brightness": 0.8,
+    "contrast": 0.5,
+    "saturation": 0.6,
+    "sceneChange": true,
+    "label": "Very bright scene"
+  }
+]

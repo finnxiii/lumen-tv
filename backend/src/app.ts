@@ -3,13 +3,18 @@ import express, { type Request, type Response } from "express";
 import type { Server } from "socket.io";
 import { z } from "zod";
 import { OFF_TOPIC, recommend } from "./ai.js";
-import { CODE_PATTERN, createSession, getSession, type Session } from "./sessions.js";
-import { changeMode, modeSchema } from "./socket.js";
+import { sceneAt } from "./scenes.js";
+import { CODE_PATTERN, createSession, getSession, modeSchema, type Session } from "./sessions.js";
+import { changeMode } from "./socket.js";
 
 const codeParam = z.string().toUpperCase().regex(CODE_PATTERN);
 // Protects the Gemini free-tier quota (~15 req/min) from button mashing.
 const AI_COOLDOWN_MS = 3000;
 const recommendBody = z.object({ code: codeParam, request: z.string().trim().min(1).max(300) });
+const analyzeBody = z.object({
+  clipId: z.string().min(1).max(64),
+  timestamp: z.number().nonnegative(),
+});
 const modeBody = z.object({ mode: modeSchema, source: z.enum(["phone", "tv"]).default("phone") });
 
 /** Validates :code and returns the session, or sends a 400/404 and returns undefined. */
@@ -48,6 +53,21 @@ export function createApp(io: Server) {
   app.get("/api/sessions/:code", (req, res) => {
     const session = findSession(req, res);
     if (session) res.json(session.state);
+  });
+
+  // Serves ai/analyze.py's precomputed results; nothing is analysed live.
+  app.post("/api/scenes/analyze", (req, res) => {
+    const body = analyzeBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: "Body must be { clipId, timestamp }" });
+      return;
+    }
+    const scene = sceneAt(body.data.clipId, body.data.timestamp);
+    if (!scene) {
+      res.status(404).json({ error: `No scene data for clip "${body.data.clipId}"` });
+      return;
+    }
+    res.json(scene);
   });
 
   // Test shim from docs/tv-integration.md: same as a mode:update socket event.
