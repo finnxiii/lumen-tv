@@ -1,5 +1,6 @@
 import type { Server, Socket } from "socket.io";
 import { z } from "zod";
+import { computeSettings } from "./engine.js";
 import {
   CODE_PATTERN,
   getSession,
@@ -66,8 +67,9 @@ function pushHistory(session: Session): void {
 
 export function changeMode(io: Server, session: Session, mode: ModeId, source: Source): void {
   pushHistory(session);
-  // task 4: settings will come from the engine; until then they carry over unchanged
-  apply(io, session, mode, session.state.settings, source);
+  const { roomLight } = session.state;
+  const { settings } = computeSettings({ mode, roomLight, preferences: session.preferences });
+  apply(io, session, mode, settings, source);
 }
 
 export function undo(io: Server, session: Session): void {

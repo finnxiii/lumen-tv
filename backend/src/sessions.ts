@@ -1,3 +1,5 @@
+import { computeSettings } from "./engine.js";
+
 // Types mirror shared/contract.md. Keep them in sync.
 export type ModeId = "cinema" | "night" | "bright" | "sports";
 
@@ -47,21 +49,14 @@ export interface Session {
   history: Pick<SessionState, "mode" | "settings">[];
   pending: Recommendation | undefined;
   playback: { position: number; playing: boolean } | undefined;
+  /** Last /api/ai/recommend time, for the per-session cooldown. */
+  lastAiAt: number;
 }
 
 // No 0/O/1/I so codes can't be misread off the TV screen.
 export const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const CODE_PATTERN = /^[A-HJ-NP-Z2-9]{4}$/;
 export const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
-
-const ZERO_SETTINGS: PictureSettings = {
-  brightness: 0,
-  contrast: 0,
-  saturation: 0,
-  warmth: 0,
-  shadows: 0,
-  sharpness: 0,
-};
 
 const sessions = new Map<string, Session>();
 
@@ -81,7 +76,7 @@ export function createSession(now = Date.now()): Session {
     code: newCode(),
     phoneConnected: false,
     mode: "cinema",
-    settings: { ...ZERO_SETTINGS },
+    settings: computeSettings({ mode: "cinema", roomLight: "dim", preferences: {} }).settings,
     clipId: "night",
     roomLight: "dim",
     expiresAt: now + SESSION_TTL_MS,
@@ -92,6 +87,7 @@ export function createSession(now = Date.now()): Session {
     history: [],
     pending: undefined,
     playback: undefined,
+    lastAiAt: 0,
   };
   sessions.set(state.code, session);
   return session;

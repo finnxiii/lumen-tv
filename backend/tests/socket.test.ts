@@ -3,8 +3,9 @@ import type { AddressInfo } from "node:net";
 import { Server } from "socket.io";
 import { io as connect, type Socket } from "socket.io-client";
 import request from "supertest";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
+import { PRESETS } from "../src/engine.js";
 import { createSession, getSession, type SessionState } from "../src/sessions.js";
 import { attachSocketHandlers } from "../src/socket.js";
 
@@ -79,7 +80,11 @@ describe("socket", () => {
 
     const applied = next(tv, "settings:apply");
     phone.emit("mode:update", { mode: "night", source: "tv" });
-    expect(await applied).toMatchObject({ mode: "night", source: "phone" });
+    expect(await applied).toMatchObject({
+      mode: "night",
+      settings: PRESETS.night, // dim room, no prefs
+      source: "phone",
+    });
 
     const undone = next(tv, "settings:apply");
     phone.emit("settings:undo", {});
@@ -153,6 +158,49 @@ describe("socket", () => {
     phone.emit("recommendation:respond", { id: "r1", accepted: true });
     expect(await applied).toEqual({ mode: "bright", settings, source: "ai" });
     expect(getSession(code)?.pending).toBeUndefined();
+  });
+
+  it("AI recommend → TV gets it → phone accepts → applied", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const { code, tv, phone } = await pair();
+
+    const shown = next<{ id: string; mode: string }>(tv, "ai:recommendation");
+    const res = await request(app)
+      .post("/api/ai/recommend")
+      .send({ code, request: "I can't see anything in this dark scene" })
+      .expect(200);
+    const rec = await shown;
+    expect(rec).toEqual(res.body);
+    expect(rec.mode).toBe("bright");
+
+    const applied = next(tv, "settings:apply");
+    phone.emit("recommendation:respond", { id: rec.id, accepted: true });
+    expect(await applied).toMatchObject({ mode: "bright", source: "ai" });
+
+    // cooldown: a second request straight away is refused
+    await request(app).post("/api/ai/recommend").send({ code, request: "too dark" }).expect(429);
+    await request(app).post("/api/ai/recommend").send({ code, request: "" }).expect(400);
+    await request(app).post("/api/ai/recommend").send({ code: "ZZZZ", request: "x" }).expect(404);
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("off-topic AI request → 422 and nothing sent to the TV", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const { code, tv } = await pair();
+    let tvGotIt = false;
+    tv.on("ai:recommendation", () => (tvGotIt = true));
+    const res = await request(app)
+      .post("/api/ai/recommend")
+      .send({ code, request: "what's the weather tomorrow?" })
+      .expect(422);
+    expect(res.body.error).toMatch(/only help with how the picture looks/);
+    expect(getSession(code)?.pending).toBeUndefined();
+    expect(tvGotIt).toBe(false);
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   it("REST /mode shim broadcasts settings:apply", async () => {
