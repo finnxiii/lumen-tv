@@ -3,7 +3,7 @@ import { computeSettings } from "./engine.js";
 import type { SceneInsights } from "./scenes.js";
 
 // Types mirror shared/contract.md. Keep them in sync.
-export const modeSchema = z.enum(["cinema", "night", "bright", "sports"]);
+export const modeSchema = z.enum(["original", "cinema", "night", "bright", "sports"]);
 export type ModeId = z.infer<typeof modeSchema>;
 
 export interface PictureSettings {

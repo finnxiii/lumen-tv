@@ -64,3 +64,13 @@ describe("REST", () => {
     await request(app).post("/api/sessions/ZZZZ/join").expect(404);
   });
 });
+
+describe("phone controller", () => {
+  const app = createApp(new Server());
+
+  it("is served at / and at the QR link /join/:code", async () => {
+    await request(app).get("/").expect(200).expect("Content-Type", /html/);
+    const res = await request(app).get("/join/ABCD").expect(200);
+    expect(res.text).toContain("Lumen Remote");
+  });
+});

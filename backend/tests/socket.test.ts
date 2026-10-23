@@ -238,6 +238,9 @@ describe("socket", () => {
     const applied = next(tv, "settings:apply");
     await request(app).post(`/api/sessions/${code}/mode`).send({ mode: "cinema" }).expect(200);
     expect(await applied).toMatchObject({ mode: "cinema", source: "phone" });
+    const original = next(tv, "settings:apply");
+    await request(app).post(`/api/sessions/${code}/mode`).send({ mode: "original" }).expect(200);
+    expect(await original).toMatchObject({ mode: "original", settings: PRESETS.original });
     await request(app).post(`/api/sessions/${code}/mode`).send({ mode: "disco" }).expect(400);
   });
 });

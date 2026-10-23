@@ -101,8 +101,12 @@ export function attachSocketHandlers(io: Server): void {
     const { code, role } = socket.data as { code: string; role: Role };
     // `${code}:tv` / `${code}:phone` let us target one role and count phones.
     void socket.join([code, `${code}:${role}`]);
+    console.log(`[socket] ${role} connected to ${code}`);
     updatePresence(io, code);
-    socket.on("disconnect", () => updatePresence(io, code));
+    socket.on("disconnect", (reason) => {
+      console.log(`[socket] ${role} left ${code} (${reason})`);
+      updatePresence(io, code);
+    });
 
     /** Validates sender role and payload; drops the socket if its session has gone. */
     function on<E extends EventName>(

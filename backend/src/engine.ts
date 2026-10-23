@@ -44,6 +44,7 @@ const LIMIT = 50;
 // contrast/saturation = (eq factor - 1) * 100, brightness = eq brightness * 200,
 // warmth = (red gain - blue gain) * 100, sharpness from unsharp.
 export const PRESETS: Record<ModeId, PictureSettings> = {
+  original: { brightness: 0, contrast: 0, saturation: 0, warmth: 0, shadows: 0, sharpness: 0 },
   cinema: { brightness: -16, contrast: 25, saturation: -25, warmth: -22, shadows: 0, sharpness: 0 },
   night: { brightness: -36, contrast: -5, saturation: 20, warmth: 45, shadows: 0, sharpness: 0 },
   bright: { brightness: 24, contrast: 15, saturation: 40, warmth: 0, shadows: 0, sharpness: 0 },
@@ -51,6 +52,7 @@ export const PRESETS: Record<ModeId, PictureSettings> = {
 };
 
 export const MODE_LABEL: Record<ModeId, string> = {
+  original: "Original",
   cinema: "Cinema",
   night: "Night",
   bright: "Bright Room",

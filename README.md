@@ -4,14 +4,14 @@ An AI-powered viewing assistant for Amazon Vega OS that personalises the TV expe
 
 ## Repo layout
 
-| Folder | What it is | Owner |
-|--------|-----------|-------|
-| `tv/` | Vega OS app — React Native + TypeScript (Vega SDK) | Finn (NHL) |
-| `phone/` | Phone controller website — React + TypeScript | NLH |
-| `backend/` | Node.js + Express + Socket.IO, in-memory sessions, Gemini AI | AYTH |
-| `ai/` | Python/OpenCV offline scene analysis | AYTH |
-| `shared/` | Event contract used by all parts | All |
-| `docs/` | Architecture and integration notes | All |
+| Folder | What it is |
+|--------|-----------|
+| `tv/` | Vega OS app — React Native + TypeScript (Vega SDK) |
+| `phone/` | Phone controller web page (plain HTML, served by the backend) |
+| `backend/` | Node.js + Express + Socket.IO, in-memory sessions, Gemini AI |
+| `ai/` | Python/OpenCV offline scene analysis |
+| `shared/` | Event contract used by all parts |
+| `docs/` | Architecture and integration notes |
 
 ## How it works
 
@@ -116,6 +116,7 @@ Edit `tv/src/config.local.ts`:
 ```ts
 export const MEDIA_BASE_URL   = 'https://<something>.trycloudflare.com';  // from step 5
 export const BACKEND_URL      = 'http://<your-mac-ip>:4000';
+export const PHONE_URL        = 'http://<your-mac-ip>:4000';               // the QR code opens the phone remote
 export const USE_MOCK_SESSION = false;
 ```
 
@@ -134,25 +135,28 @@ The TV shows a pairing screen with a 4-letter room code.
 
 To try the TV app without a backend, leave `USE_MOCK_SESSION = true`. A simulated phone and AI then drive it.
 
-### 7. Control it from a phone (or a terminal)
+### 7. Control it from your phone
 
-From `tv/`, start the terminal phone controller with the room code from the TV:
+The backend serves the phone remote. Put your phone on the same Wi-Fi as the Mac, then either:
 
-```sh
-npm run fake-phone -- ABCD
-```
+- scan the QR code on the TV pairing screen, or
+- open `http://<your-mac-ip>:4000` and type the room code.
 
-| Type | What happens |
-|------|--------------|
-| `mode night` | TV switches to Night mode (`original`, `cinema`, `night`, `bright`, `sports`) |
-| `ai it's way too dark, I can't see anything` | AI suggests Bright Room; press Apply on the TV |
-| `ai make it feel like a movie theatre` | AI suggests Cinema |
-| `ai im watching footbal` | Typos are fine: AI suggests Sports |
-| `ai what's the weather tomorrow` | Rejected (422): only picture requests are accepted |
-| `undo` | TV goes back to the previous mode |
+To test on the laptop instead, open `http://localhost:4000` in a browser. Optionally, turn on the mobile view in the browser's dev tools.
+
+On the remote you can switch modes, ask the assistant, Apply or Dismiss its suggestions, Undo, and set the room lighting.
+
+| Try asking | What happens |
+|------------|--------------|
+| `It's way too dark, I can't see anything` | Suggests Bright Room. Press Apply on the phone or the TV |
+| `Make it feel like a movie theatre` | Suggests Cinema |
+| `im watching footbal` | Typos are fine: suggests Sports |
+| `Reset it to the original` | Suggests Original |
+| `What's the weather tomorrow` | Rejected: it only helps with the picture |
 
 The backend log shows how each request was handled. `(gemini)` means Gemini answered, and `(rules)` means the keyword fallback was used.
 
+There's also a terminal remote: `cd tv && npm install && npm run fake-phone -- ABCD`.
 `npm run fake-phone -- ABCD --demo` runs a scripted demo instead.
 
 ### Backend only, no TV
@@ -160,7 +164,7 @@ The backend log shows how each request was handled. `(gemini)` means Gemini answ
 ```sh
 curl -s -X POST localhost:4000/api/sessions                 # note the "code"
 cd backend && npx tsx scripts/fake-client.ts ABCD tv        # fake TV: prints every event
-cd tv && npm run fake-phone -- ABCD                         # fake phone: commands above
+open http://localhost:4000/join/ABCD                        # phone remote in a browser
 ```
 
 In the fake TV terminal, type these to drive it:
@@ -183,9 +187,11 @@ More detail is in [tv/README.md](tv/README.md).
 - [docs/tv-integration.md](docs/tv-integration.md) — Backend/phone integration: REST, Socket.IO events, payloads, testing
 - [shared/contract.md](shared/contract.md) — REST endpoints and Socket.IO event contract
 
-## Credits
+## Contributors
 
-- *Tears of Steel* and *Big Buck Bunny* © Blender Foundation, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/).
+- Aung Ye Thant Hein
+- Naing Htoo Lwin
+- Nyan Lin Htet
 
 ## License
 

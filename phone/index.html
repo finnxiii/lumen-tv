@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumen Remote</title>
+<style>
+  :root { --bg:#0e1116; --card:#181c24; --line:#2a303c; --text:#e8eaf0; --muted:#8a92a3; --accent:#f5b84a; --ok:#5fd38d; --err:#ff7a7a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.4 system-ui,-apple-system,sans-serif; }
+  main { max-width:480px; margin:0 auto; padding:16px; display:grid; gap:12px; align-content:start; }
+  /* On a laptop, show the remote inside a phone-sized frame. */
+  @media (min-width: 700px) {
+    body { min-height:100vh; display:grid; place-items:center; background:#05070a; }
+    main { width:390px; height:844px; overflow-y:auto; background:var(--bg); border:10px solid #2b2f38; border-radius:48px; padding:28px 16px; box-shadow:0 20px 60px #000a; }
+  }
+  h1 { font-size:20px; margin:4px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; display:grid; gap:10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .muted { color:var(--muted); font-size:14px; }
+  input, select, button { font:inherit; color:var(--text); background:#0f1319; border:1px solid var(--line); border-radius:10px; padding:12px; min-height:44px; }
+  input { flex:1; min-width:0; }
+  button { cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+  button:disabled, input:disabled, select:disabled { opacity:.5; cursor:not-allowed; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  button.primary { background:var(--accent); color:#1a1300; border-color:var(--accent); font-weight:600; }
+  button.on { border-color:var(--accent); color:var(--accent); font-weight:600; }
+  button.pending { border-style:dashed; }
+  button.chip { min-height:36px; padding:6px 12px; border-radius:999px; font-size:14px; color:var(--muted); }
+  .modes { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .err { color:var(--err); font-size:14px; }
+  .okText { color:var(--ok); font-size:14px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--accent); display:inline-block; }
+  .dot.ok { background:var(--ok); } .dot.bad { background:var(--err); }
+  .toast { position:sticky; top:0; z-index:1; background:#232937; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px; }
+  .toast:empty { display:none; }
+  .spinner { width:16px; height:16px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation:none; border-right-color:currentColor; opacity:.6; } }
+  #rec { border-color:var(--accent); }
+  fieldset { border:0; margin:0; padding:0; display:grid; gap:12px; min-width:0; }
+  ul { margin:0; padding-left:18px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Lumen Remote</h1>
+
+  <form id="join" class="card">
+    <label class="muted" for="code">Room code on the TV</label>
+    <div class="row">
+      <input id="code" maxlength="4" autocapitalize="characters" autocomplete="off" placeholder="ABCD" required>
+      <button class="primary" id="joinBtn">Join</button>
+    </div>
+    <div class="err" id="joinErr" role="alert"></div>
+  </form>
+
+  <div id="app" hidden>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="card">
+      <div class="row"><span class="dot" id="dot" aria-hidden="true"></span><strong id="room"></strong><span class="muted" id="status">Connecting…</span></div>
+      <div class="muted" id="now"></div>
+      <div class="muted" id="scene"></div>
+    </div>
+
+    <fieldset id="controls" disabled>
+      <div class="card" id="rec" hidden aria-live="polite">
+        <span class="muted" id="recFrom"></span>
+        <strong id="recTitle"></strong>
+        <div id="recText"></div>
+        <ul class="muted" id="recReasons"></ul>
+        <div class="row">
+          <button type="button" class="primary" data-accept="true">Apply</button>
+          <button type="button" data-accept="false">Dismiss</button>
+        </div>
+      </div>
+
+      <form class="card" id="ask">
+        <label for="request"><strong>Ask the assistant</strong></label>
+        <input id="request" maxlength="300" placeholder="It's too dark, I can't see anything" autocomplete="off">
+        <div class="row" id="chips">
+          <button type="button" class="chip">It's too dark</button>
+          <button type="button" class="chip">Make it cinematic</button>
+          <button type="button" class="chip">Easier on my eyes</button>
+        </div>
+        <button class="primary" id="askBtn">Send</button>
+        <div id="askMsg" role="status" aria-live="polite"></div>
+      </form>
+
+      <div class="card">
+        <strong>Viewing mode</strong>
+        <div class="modes" id="modes"></div>
+        <button type="button" id="undo">Undo last change</button>
+      </div>
+
+      <div class="card">
+        <label for="light"><strong>Room lighting</strong></label>
+        <select id="light">
+          <option value="dark">Dark</option><option value="dim">Dim</option>
+          <option value="normal">Normal</option><option value="bright">Bright</option>
+        </select>
+      </div>
+    </fieldset>
+  </div>
+</main>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const MODES = { original: "Original", cinema: "Cinema", night: "Night", bright: "Bright Room", sports: "Sports" };
+const FROM = { phone: "from the phone", tv: "from the TV", ai: "by the assistant", undo: "by Undo" };
+const $ = (id) => document.getElementById(id);
+let socket, code, recId, toastTimer;
+
+function toast(msg) {
+  $("toast").textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => ($("toast").textContent = ""), 4000);
+}
+
+function setStatus(text, kind) {
+  $("status").textContent = text;
+  $("dot").className = `dot ${kind}`;
+  $("controls").disabled = kind !== "ok";
+}
+
+function setAskMsg(text, kind) {
+  $("askMsg").className = kind === "err" ? "err" : kind === "ok" ? "okText" : "muted";
+  $("askMsg").textContent = text;
+}
+
+for (const [id, label] of Object.entries(MODES)) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = label; b.dataset.mode = id;
+  b.onclick = () => {
+    for (const m of $("modes").children) m.classList.toggle("pending", m === b);
+    toast(`Switching the TV to ${label}…`);
+    socket.emit("mode:update", { mode: id });
+  };
+  $("modes").append(b);
+}
+
+function render(state) {
+  $("now").textContent = `Playing: ${state.clipId ?? "nothing yet"} · Mode: ${MODES[state.mode] ?? state.mode}`;
+  $("light").value = state.roomLight;
+  for (const b of $("modes").children) b.classList.toggle("on", b.dataset.mode === state.mode);
+}
+
+function showRec(r) {
+  recId = r.id; $("rec").hidden = false;
+  $("recFrom").textContent = r.request ? `You asked: “${r.request}”` : "Suggested for this scene";
+  $("recTitle").textContent = r.title;
+  $("recText").textContent = r.explanation;
+  $("recReasons").replaceChildren(...r.reasons.map((x) => Object.assign(document.createElement("li"), { textContent: `${x.label}: ${x.value}` })));
+}
+
+async function join(raw) {
+  code = raw.trim().toUpperCase();
+  $("joinErr").textContent = ""; $("joinBtn").disabled = true;
+  const res = await fetch(`/api/sessions/${encodeURIComponent(code)}/join`, { method: "POST" }).catch(() => null);
+  $("joinBtn").disabled = false;
+  if (!res?.ok) {
+    $("joinErr").textContent = res ? (await res.json()).error : "Can't reach the backend. Is it running?";
+    return;
+  }
+  history.replaceState(null, "", `/join/${code}`);
+  $("join").hidden = true; $("app").hidden = false; $("room").textContent = `Room ${code}`;
+  render(await res.json());
+
+  socket = io({ query: { code, role: "phone" } });
+  socket.on("connect", () => setStatus("Connected", "ok"));
+  socket.on("disconnect", () => setStatus("Reconnecting…", ""));
+  socket.on("connect_error", (e) => setStatus(e.message, "bad"));
+  socket.on("session:state", render);
+  socket.on("scene:insights", (s) => ($("scene").textContent = `Scene: ${s.label ?? "?"} (brightness ${Math.round(s.brightness * 100)}%)`));
+  socket.on("ai:recommendation", (r) => {
+    if (!r.request) toast("New suggestion for this scene");
+    showRec(r);
+  });
+  socket.on("settings:apply", ({ mode, source }) => {
+    for (const m of $("modes").children) m.classList.remove("pending");
+    $("rec").hidden = true;
+    toast(`TV switched to ${MODES[mode] ?? mode} ${FROM[source] ?? ""}`);
+  });
+}
+
+$("join").onsubmit = (e) => { e.preventDefault(); join($("code").value); };
+
+$("ask").onsubmit = async (e) => {
+  e.preventDefault();
+  const request = $("request").value.trim();
+  if (!request) { setAskMsg("Type what you'd like to change first.", "err"); $("request").focus(); return; }
+  $("askBtn").disabled = $("request").disabled = true;
+  $("askBtn").innerHTML = '<span class="spinner" aria-hidden="true"></span>Asking…';
+  setAskMsg("Sent. The assistant is thinking…");
+  const res = await fetch("/api/ai/recommend", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, request }),
+  }).catch(() => null);
+  $("askBtn").disabled = $("request").disabled = false;
+  $("askBtn").textContent = "Send";
+  if (!res) { setAskMsg("Can't reach the backend. Try again.", "err"); return; }
+  const body = await res.json();
+  if (!res.ok) { setAskMsg(body.error, "err"); $("request").focus(); return; }
+  $("request").value = "";
+  showRec(body);
+  setAskMsg("✓ Suggestion ready above (also shown on the TV).", "ok");
+  $("rec").scrollIntoView({ behavior: "smooth", block: "nearest" });
+};
+
+$("chips").onclick = (e) => {
+  if (!e.target.classList.contains("chip")) return;
+  $("request").value = e.target.textContent;
+  $("ask").requestSubmit();
+};
+
+$("rec").onclick = (e) => {
+  const accept = e.target.dataset.accept;
+  if (!accept) return;
+  socket.emit("recommendation:respond", { id: recId, accepted: accept === "true" });
+  $("rec").hidden = true; setAskMsg("");
+  toast(accept === "true" ? `Applying “${$("recTitle").textContent}”…` : "Suggestion dismissed");
+};
+$("undo").onclick = () => { toast("Undoing…"); socket.emit("settings:undo"); };
+$("light").onchange = (e) => {
+  socket.emit("preferences:update", { roomLight: e.target.value });
+  toast(`Room lighting set to ${e.target.selectedOptions[0].text}. The assistant will use it.`);
+};
+
+const fromUrl = location.pathname.match(/^\/join\/([A-Za-z0-9]{4})$/) ?? location.search.match(/code=([A-Za-z0-9]{4})/);
+if (fromUrl) { $("code").value = fromUrl[1].toUpperCase(); join(fromUrl[1]); }
+</script>
+</body>
+</html>

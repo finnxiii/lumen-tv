@@ -1,4 +1,5 @@
 import cors from "cors";
+import { fileURLToPath } from "node:url";
 import express, { type Request, type Response } from "express";
 import type { Server } from "socket.io";
 import { z } from "zod";
@@ -6,6 +7,9 @@ import { OFF_TOPIC, recommend } from "./ai.js";
 import { sceneAt } from "./scenes.js";
 import { CODE_PATTERN, createSession, getSession, modeSchema, type Session } from "./sessions.js";
 import { changeMode } from "./socket.js";
+
+// Same path from src/ (tsx) and dist/ (node): <repo>/phone
+const PHONE_DIR = fileURLToPath(new URL("../../phone", import.meta.url));
 
 const codeParam = z.string().toUpperCase().regex(CODE_PATTERN);
 // Protects the Gemini free-tier quota (~15 req/min) from button mashing.
@@ -35,6 +39,10 @@ export function createApp(io: Server) {
   // shortcut: any origin allowed, lock to the phone site's URL once it's hosted
   app.use(cors());
   app.use(express.json());
+
+  // The phone controller; the TV's QR code opens <PHONE_URL>/join/<code>.
+  app.use(express.static(PHONE_DIR));
+  app.get("/join/:code", (_req, res) => res.sendFile("index.html", { root: PHONE_DIR }));
 
   app.get("/health", (_req, res) => {
     res.json({ status: "OK" });

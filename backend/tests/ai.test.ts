@@ -26,6 +26,7 @@ describe("interpretByRules", () => {
     ["make it darker", "night", ["less_bright"]],
     ["Make it more cinematic", "cinema", ["more_contrast"]],
     ["watching the football match", "sports", ["sharper"]],
+    ["reset it to the original", "original", []],
   ])("%s → %s", (request, mode, intents) => {
     expect(interpretByRules({ ...ctx, request })).toMatchObject({ mode, intents });
   });

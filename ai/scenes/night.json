@@ -1,0 +1,227 @@
+[
+ {
+  "clipId": "night",
+  "timestamp": 0.0,
+  "brightness": 0.257,
+  "contrast": 0.295,
+  "saturation": 0.359,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 1.0,
+  "brightness": 0.259,
+  "contrast": 0.296,
+  "saturation": 0.359,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 2.0,
+  "brightness": 0.26,
+  "contrast": 0.301,
+  "saturation": 0.351,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 3.0,
+  "brightness": 0.259,
+  "contrast": 0.297,
+  "saturation": 0.344,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 4.0,
+  "brightness": 0.259,
+  "contrast": 0.337,
+  "saturation": 0.422,
+  "sceneChange": true,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 5.0,
+  "brightness": 0.268,
+  "contrast": 0.339,
+  "saturation": 0.424,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 6.0,
+  "brightness": 0.264,
+  "contrast": 0.336,
+  "saturation": 0.438,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 7.0,
+  "brightness": 0.265,
+  "contrast": 0.339,
+  "saturation": 0.452,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 8.0,
+  "brightness": 0.355,
+  "contrast": 0.4,
+  "saturation": 0.603,
+  "sceneChange": true,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 9.0,
+  "brightness": 0.354,
+  "contrast": 0.418,
+  "saturation": 0.594,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 10.0,
+  "brightness": 0.354,
+  "contrast": 0.392,
+  "saturation": 0.61,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 11.0,
+  "brightness": 0.362,
+  "contrast": 0.395,
+  "saturation": 0.614,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 12.0,
+  "brightness": 0.355,
+  "contrast": 0.393,
+  "saturation": 0.613,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 13.0,
+  "brightness": 0.339,
+  "contrast": 0.412,
+  "saturation": 0.619,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 14.0,
+  "brightness": 0.334,
+  "contrast": 0.407,
+  "saturation": 0.618,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 15.0,
+  "brightness": 0.327,
+  "contrast": 0.398,
+  "saturation": 0.612,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 16.0,
+  "brightness": 0.318,
+  "contrast": 0.409,
+  "saturation": 0.688,
+  "sceneChange": true,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 17.0,
+  "brightness": 0.312,
+  "contrast": 0.406,
+  "saturation": 0.695,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 18.0,
+  "brightness": 0.31,
+  "contrast": 0.408,
+  "saturation": 0.695,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 19.0,
+  "brightness": 0.303,
+  "contrast": 0.408,
+  "saturation": 0.692,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 20.0,
+  "brightness": 0.306,
+  "contrast": 0.419,
+  "saturation": 0.687,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 21.0,
+  "brightness": 0.337,
+  "contrast": 0.411,
+  "saturation": 0.653,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 22.0,
+  "brightness": 0.405,
+  "contrast": 0.375,
+  "saturation": 0.585,
+  "sceneChange": false,
+  "label": "Balanced scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 23.0,
+  "brightness": 0.185,
+  "contrast": 0.207,
+  "saturation": 0.521,
+  "sceneChange": true,
+  "label": "Dark scene"
+ },
+ {
+  "clipId": "night",
+  "timestamp": 24.0,
+  "brightness": 0.221,
+  "contrast": 0.164,
+  "saturation": 0.401,
+  "sceneChange": true,
+  "label": "Dark scene"
+ }
+]

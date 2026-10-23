@@ -33,6 +33,7 @@ export interface AiContext {
 
 const SYSTEM = `You are the viewing assistant in a TV app. Choose the best viewing mode for the viewer's request and situation, and list 0-3 adjustment intents.
 Modes:
+- original: the unprocessed picture, no adjustments. For "reset", "turn it off", "how it was", "natural".
 - cinema: filmic look, deeper contrast, muted cool colour. For "cinematic", movies.
 - night: dimmer and warmer. For late-night viewing, eye comfort, picture too bright, dark rooms.
 - bright: brighter and more vivid. For bright rooms, or dark scenes where detail is hard to see.
@@ -119,6 +120,12 @@ const RULES: { words: string[]; mode?: ModeId; intents: Intent[]; why: string }[
     words: ["vivid", "colour", "colours", "color", "colors", "pop", "saturated"],
     intents: ["more_vivid"],
     why: "Colours boosted.",
+  },
+  {
+    words: ["original", "reset", "unprocessed", "untouched"],
+    mode: "original",
+    intents: [],
+    why: "Original mode shows the picture with no adjustments.",
   },
   { words: ["warm", "warmer"], intents: ["warmer"], why: "Picture warmed up." },
   { words: ["cool", "cooler", "cold", "blue"], intents: ["cooler"], why: "Picture cooled down." },
