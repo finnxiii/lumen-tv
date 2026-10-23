@@ -16,14 +16,16 @@
     "build:debug": "react-native build-vega --build-type Debug",
     "build:app": "npm-run-all build:release",
     "build": "npm-run-all build:release",
-    "release": "npm-run-all lint test build:app"
+    "release": "npm-run-all lint test build:app",
+    "fake-phone": "node scripts/fake-phone.js"
   },
   "dependencies": {
     "@amazon-devices/react-native-kepler": "~4.0.0",
     "@amazon-devices/react-native-w3cmedia": "~2.3.2",
     "qrcode": "^1.5.3",
     "react": "19.2.0",
-    "react-native": "0.83.0"
+    "react-native": "0.83.0",
+    "socket.io-client": "^4.8.0"
   },
   "engines": {
     "node": ">=20"

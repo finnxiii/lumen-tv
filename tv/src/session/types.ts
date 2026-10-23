@@ -76,6 +76,7 @@ export interface SessionClient {
   sendRecommendationResponse(id: string, accepted: boolean): void;
   sendSettingsUndo(): void;
   sendPlaybackUpdate(clipId: string, position: number, playing: boolean): void;
+  requestAnalysis(request?: string): Promise<void>;
   on<K extends SessionEventName>(event: K, handler: (p: SessionEventPayload<K>) => void): void;
   off<K extends SessionEventName>(event: K, handler: (p: SessionEventPayload<K>) => void): void;
 }

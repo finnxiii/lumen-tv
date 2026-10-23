@@ -57,6 +57,16 @@ function waitForEvent(player: VideoPlayer, name: string, ms: number): Promise<vo
   });
 }
 
+export type PlaybackStatus =
+  | { kind: 'loading' }
+  | { kind: 'applying'; mode: string }
+  | { kind: 'resuming' }
+  | { kind: 'restarting' }
+  | { kind: 'playing' }
+  | { kind: 'paused' }
+  | { kind: 'ended' }
+  | { kind: 'error'; message: string };
+
 export interface DebugInfo {
   readyState: number;
   paused: boolean;
@@ -83,17 +93,17 @@ export interface PlayerEngine {
   showSurface: boolean;
   surfaceKey: number;
   state: PlayerState;
+  playbackStatus: PlaybackStatus;
   load: (clip: ClipId, mode: VariantId) => void;
   play: () => void;
   pause: () => void;
   seekBy: (seconds: number) => void;
-  overlay: {visible: boolean; text: string};
 }
 
 export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
   const [showSurface, setShowSurface] = useState(true);
   const [surfaceKey, setSurfaceKey] = useState(0);
-  const [overlay, setOverlay] = useState({visible: true, text: 'Loading…'});
+  const [playbackStatus, setPlaybackStatus] = useState<PlaybackStatus>({kind: 'loading'});
 
   const [state, setState] = useState<PlayerState>({
     playing: false,
@@ -117,9 +127,13 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
   const lastEventRef     = useRef('none');
   const listenerCleanupRef = useRef<() => void>(() => {});
   const initialClipRef   = useRef(initialClip);
+  const loadedClipRef    = useRef<ClipId>(initialClip);
+  const loadedModeRef    = useRef<VariantId>('original');
+  const isMonitoringRef  = useRef(false);
 
-  // Stable ref so useCallbacks outside the effect can trigger a load
+  // Stable refs so useCallbacks outside the effect can call into the effect closure
   const doLoadRef = useRef<(clip: ClipId, mode: VariantId) => void>(() => {});
+  const startRateMonitorRef = useRef<() => void>(() => {});
 
   const onSurfaceViewCreated = useCallback((handle: string) => {
     if (surfaceHandleRef.current !== null) { return; }
@@ -143,6 +157,52 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
         surfaceReadyRef.current = () => { clearTimeout(tid); resolve(); };
       });
 
+    // ── Rate-based resume monitor ─────────────────────────────────────────
+    const startRateMonitor = (): void => {
+      if (isMonitoringRef.current) { return; }
+      isMonitoringRef.current = true;
+      setPlaybackStatus({kind: 'resuming'});
+      let prevCt = playerRef.current.currentTime ?? 0;
+      let prevWall = Date.now();
+      let normalStreak = 0;
+      const startWall = prevWall;
+
+      const poll = (): void => {
+        if (cancelled || isSwappingRef.current) {
+          isMonitoringRef.current = false;
+          return;
+        }
+        const ct = playerRef.current.currentTime ?? 0;
+        const now = Date.now();
+        const dtWall = now - prevWall;
+        const rate = dtWall > 0 ? ((ct - prevCt) / dtWall) * 1000 : 0;
+        console.log('[resume] t+' + (now - startWall) + 'ms ct=' + ct.toFixed(3) + ' rate=' + rate.toFixed(2) + ' streak=' + normalStreak);
+        if (rate >= 0.8 && rate <= 1.2) { normalStreak++; } else { normalStreak = 0; }
+        prevCt = ct;
+        prevWall = now;
+        if (normalStreak >= 4) {
+          isMonitoringRef.current = false;
+          if (!cancelled) {
+            setPlaybackStatus({kind: 'playing'});
+            setState(s => ({...s, playing: true}));
+          }
+          return;
+        }
+        if (now - startWall > 6_000) {
+          isMonitoringRef.current = false;
+          if (!cancelled) {
+            setPlaybackStatus({kind: 'restarting'});
+            setTimeout(() => doLoadRef.current(loadedClipRef.current, loadedModeRef.current), 300);
+          }
+          return;
+        }
+        setTimeout(poll, 250);
+      };
+
+      setTimeout(poll, 250);
+    };
+    startRateMonitorRef.current = startRateMonitor;
+
     const doLoad = (clip: ClipId, mode: VariantId): void => {
       if (isSwappingRef.current) {
         pendingRef.current = {clip, mode};
@@ -150,17 +210,22 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
       }
       isSwappingRef.current = true;
 
+      const isFirst = swapCountRef.current === 0;
+
       const modeInfo = MODES.find(m => m.id === mode);
       const label = modeInfo?.label ?? (mode === 'original' ? 'Original' : mode);
 
-      setOverlay({visible: true, text: `Previewing ${label} from the start of the scene…`});
+      if (isFirst) {
+        setPlaybackStatus({kind: 'loading'});
+      } else {
+        setPlaybackStatus({kind: 'applying', mode: label});
+      }
       setState(s => ({...s, ended: false, error: null}));
-
-      const isFirst = swapCountRef.current === 0;
 
       const run = async (): Promise<void> => {
         // ── Teardown previous player (skip on first load) ────────────────────
         if (!isFirst) {
+          isMonitoringRef.current = false;
           const old = playerRef.current;
           old.pause();
           listenerCleanupRef.current();
@@ -205,22 +270,42 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
         // ── Attach listeners ──────────────────────────────────────────────────
         const onPlaying: W3CEventListener = () => {
           lastEventRef.current = 'playing';
+          const pausedAt = pauseStartRef.current;
+          const pauseDuration = pausedAt !== null ? Date.now() - pausedAt : 0;
           pauseStartRef.current = null;
-          if (!cancelled) { setState(s => ({...s, playing: true})); }
+          if (!cancelled) {
+            setState(s => ({...s, playing: true}));
+            if (!isMonitoringRef.current && pauseDuration > 3_000) {
+              // System play key resumed after a long pause — start rate monitor
+              startRateMonitor();
+            } else if (!isMonitoringRef.current) {
+              setPlaybackStatus({kind: 'playing'});
+            }
+            // If isMonitoringRef.current: play() already started the monitor; it owns the status
+          }
         };
         const onPause: W3CEventListener = () => {
           lastEventRef.current = 'pause';
           pauseStartRef.current = Date.now();
-          if (!cancelled) { setState(s => ({...s, playing: false})); }
+          if (!cancelled) {
+            setState(s => ({...s, playing: false}));
+            setPlaybackStatus({kind: 'paused'});
+          }
         };
         const onEnded: W3CEventListener = () => {
           lastEventRef.current = 'ended';
-          if (!cancelled) { setState(s => ({...s, playing: false, ended: true})); }
+          if (!cancelled) {
+            setState(s => ({...s, playing: false, ended: true}));
+            setPlaybackStatus({kind: 'ended'});
+          }
         };
         const onError: W3CEventListener = () => {
           const code = p.error?.code ?? '?';
           lastEventRef.current = `err:${code}`;
-          if (!cancelled) { setState(s => ({...s, error: `err:${code}`})); }
+          if (!cancelled) {
+            setState(s => ({...s, error: `err:${code}`}));
+            setPlaybackStatus({kind: 'error', message: `Playback error (${code})`});
+          }
         };
         p.addEventListener('playing', onPlaying);
         p.addEventListener('pause',   onPause);
@@ -238,7 +323,7 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
         console.log('[player] src=', url);
         p.src = url;
 
-        await waitForReady(p, 15_000);
+        await waitForReady(p, 10_000);
         if (cancelled) { return; }
 
         await p.play().catch(e => console.warn('[player] play err:', String(e)));
@@ -251,11 +336,12 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
         }
         if (cancelled) { return; }
 
+        loadedClipRef.current = clip;
+        loadedModeRef.current = mode;
         setState(s => ({
           ...s, clip, mode, ready: true, ended: false, error: null,
           debug: {...s.debug, swapCount: n},
         }));
-        setOverlay({visible: false, text: ''});
         console.log('[player] swap', n, 'done');
       };
 
@@ -265,7 +351,7 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
           const msg = e instanceof Error ? e.message : String(e);
           console.warn('[player] load failed:', msg);
           setState(s => ({...s, error: msg}));
-          setOverlay({visible: false, text: ''});
+          setPlaybackStatus({kind: 'error', message: msg});
         })
         .finally(() => {
           isSwappingRef.current = false;
@@ -287,6 +373,10 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
       const rs     = (p as {readyState?: number}).readyState ?? -1;
       const pos    = p.currentTime ?? 0;
       const dur    = p.duration ?? 45;
+      const pausedAt = pauseStartRef.current;
+      if (paused && pausedAt !== null) {
+        console.log('[diag] paused dt=' + (Date.now() - pausedAt) + 'ms ct=' + pos.toFixed(3));
+      }
       setState(s => ({
         ...s,
         positionInClip: pos,
@@ -322,25 +412,14 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
   const play = useCallback(() => {
     const p = playerRef.current;
     const pausedAt = pauseStartRef.current;
-    if (pausedAt === null || Date.now() - pausedAt <= 10_000) {
+    const pauseDuration = pausedAt !== null ? Date.now() - pausedAt : 0;
+    if (pauseDuration <= 3_000) {
       p.play().catch(() => {});
       return;
     }
-    // Long pause (>10 s): show full-screen "Resuming…" until playing + ~1 s advance
-    setOverlay({visible: true, text: 'Resuming…'});
+    // Long pause (>3 s): show overlay BEFORE play(), then monitor rate until normal
+    startRateMonitorRef.current();
     p.play().catch(() => {});
-    const startTime = p.currentTime ?? 0;
-    const deadline = Date.now() + 4_000;
-    const check = (): void => {
-      if ((p.currentTime ?? 0) - startTime >= 1.0 || Date.now() > deadline) {
-        setOverlay({visible: false, text: ''});
-        return;
-      }
-      setTimeout(check, 200);
-    };
-    waitForEvent(p, 'playing', 3_000)
-      .catch(() => {})
-      .then(() => setTimeout(check, 200));
   }, []);
 
   const pause = useCallback(() => {
@@ -367,10 +446,10 @@ export function usePlayerEngine(initialClip: ClipId = 'night'): PlayerEngine {
     showSurface,
     surfaceKey,
     state,
+    playbackStatus,
     load,
     play,
     pause,
     seekBy,
-    overlay,
   };
 }

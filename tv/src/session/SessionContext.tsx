@@ -40,7 +40,7 @@ export const SessionProvider: React.FC<{children: React.ReactNode}> = ({children
   const clientRef = useRef<SessionClient>(
     USE_MOCK_SESSION
       ? new MockSessionClient()
-      : new SocketSessionClient('----'),
+      : new SocketSessionClient(),
   );
 
   const [sessionState, setSessionState] = useState<SessionState | null>(null);

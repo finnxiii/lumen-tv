@@ -9,6 +9,7 @@ import {
   PlayIcon, PauseIcon, ReplayIcon,
   ModesIcon, SparkleIcon, CompareIcon, FilmIcon,
 } from '../components/icons';
+import {StatusOverlay} from '../components/StatusOverlay';
 import {ModesOverlay} from './overlays/ModesOverlay';
 import {AssistantOverlay} from './overlays/AssistantOverlay';
 import {CompareOverlay} from './overlays/CompareOverlay';
@@ -40,7 +41,11 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
   const [clip, setClip] = useState<ClipId>(initialClip);
   const [overlay, setOverlay] = useState<OverlayType>(null);
   const [showControls, setShowControls] = useState(true);
-  const [lastFocusedBtn, setLastFocusedBtn] = useState<'play' | 'clip' | 'modes' | 'assistant' | 'compare'>('modes');
+  const [lastFocusedBtn, setLastFocusedBtn] = useState<'play' | 'clip' | 'modes' | 'assistant' | 'compare'>('assistant');
+  const [prevRecommendation, setPrevRecommendation] = useState<typeof recommendation>(null);
+  const [isAnalysing, setIsAnalysing] = useState(false);
+  const [analyseError, setAnalyseError] = useState<string | null>(null);
+  const analyseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bumpControls = useCallback(() => {
@@ -48,6 +53,14 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
     if (controlsTimerRef.current) { clearTimeout(controlsTimerRef.current); }
     controlsTimerRef.current = setTimeout(() => setShowControls(false), CONTROLS_TIMEOUT_MS);
   }, []);
+
+  // Always close overlays the same way: restore bar + focus Assistant button
+  const closeOverlay = useCallback(() => {
+    setOverlay(null);
+    setActiveOverlay(null);
+    setLastFocusedBtn('assistant');
+    bumpControls();
+  }, [setActiveOverlay, bumpControls]);
 
   useEffect(() => {
     bumpControls();
@@ -71,10 +84,30 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
     return unsub;
   }, [engine, onPlaybackCommand]);
 
-  // Overlay from session
+  // Overlay from session (phone/AI opens it)
   useEffect(() => {
     if (activeOverlay) { setOverlay(activeOverlay); }
   }, [activeOverlay]);
+
+  // When a recommendation arrives, clear the analysing state
+  useEffect(() => {
+    if (recommendation) {
+      setIsAnalysing(false);
+      setAnalyseError(null);
+      if (analyseTimeoutRef.current) {
+        clearTimeout(analyseTimeoutRef.current);
+        analyseTimeoutRef.current = null;
+      }
+      console.log('[ui] recommendation arrived id=', recommendation.id);
+    }
+  }, [recommendation]);
+
+  // Cleanup analyse timeout on unmount
+  useEffect(() => () => {
+    if (analyseTimeoutRef.current) { clearTimeout(analyseTimeoutRef.current); }
+  }, []);
+
+  const isTransition = ['loading', 'applying', 'resuming', 'restarting'].includes(engine.playbackStatus.kind);
 
   // Remote keys — back only; play/pause handled by system
   useTVEventHandler((evt: HWEvent) => {
@@ -82,9 +115,9 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
     bumpControls();
     const evtType: string = evt.eventType;
     if (evtType === 'back') {
+      if (isTransition) { return; }
       if (overlay) {
-        setOverlay(null);
-        setActiveOverlay(null);
+        closeOverlay();
       } else if (showControls) {
         onBack();
       } else {
@@ -99,13 +132,14 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (overlay) { setOverlay(null); setActiveOverlay(null); return true; }
+      if (isTransition) { return true; }
+      if (overlay) { closeOverlay(); return true; }
       if (showControls) { onBack(); return true; }
       setShowControls(true);
       return true;
     });
     return () => sub.remove();
-  }, [overlay, showControls, onBack, setActiveOverlay]);
+  }, [isTransition, overlay, showControls, onBack, closeOverlay]);
 
   // Playback update to session (~2 s)
   useEffect(() => {
@@ -121,19 +155,23 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
   const progress = engine.state.positionInClip / engine.state.clipDuration;
   const phoneConnected = sessionState?.phoneConnected ?? false;
   const isActuallyPaused = engine.state.debug.paused;
+  const hasRec = recommendation !== null;
+  const hasPrevRec = prevRecommendation !== null;
+  // Focus after overlay close: if last focused btn is play/pause and we're in transition, default to assistant
+  const effectiveFocusedBtn = (isTransition && lastFocusedBtn === 'play') ? 'assistant' : lastFocusedBtn;
 
   const handleModeSelect = (mode: ModeId): void => {
-    setOverlay(null);
-    setActiveOverlay(null);
+    closeOverlay();
     client.sendModeUpdate(mode, 'tv');
   };
 
   const handleApplyRec = (): void => {
     if (!recommendation) { return; }
+    console.log('[ui] apply rec id=', recommendation.id, 'mode=', recommendation.mode);
+    setPrevRecommendation(recommendation);
     engine.load(clip, recommendation.mode as VariantId);
     clearRecommendation();
-    setOverlay(null);
-    setActiveOverlay(null);
+    closeOverlay();
   };
 
   const handleCompareRec = (): void => {
@@ -142,30 +180,64 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
   };
 
   const handleDismissRec = (): void => {
-    if (recommendation) { client.sendRecommendationResponse(recommendation.id, false); }
+    console.log('[ui] dismiss rec id=', recommendation?.id ?? 'null');
+    if (recommendation) {
+      client.sendRecommendationResponse(recommendation.id, false);
+      setPrevRecommendation(recommendation);
+    }
     clearRecommendation();
-    setOverlay(null);
-    setActiveOverlay(null);
+    closeOverlay();
   };
 
   const handleKeepCompare = (): void => {
     if (recommendation) {
+      setPrevRecommendation(recommendation);
       engine.load(clip, recommendation.mode as VariantId);
       clearRecommendation();
     }
-    setOverlay(null);
-    setActiveOverlay(null);
+    closeOverlay();
   };
 
   const handleRevertCompare = (): void => {
-    setOverlay(null);
-    setActiveOverlay(null);
+    closeOverlay();
+  };
+
+  const handleAnalyse = useCallback(async () => {
+    if (isAnalysing) { return; }
+    setIsAnalysing(true);
+    setAnalyseError(null);
+    console.log('[ui] analyse scene requested');
+    // 8 s hard timeout in case the socket event never arrives
+    analyseTimeoutRef.current = setTimeout(() => {
+      setIsAnalysing(false);
+      setAnalyseError('No response from AI. Try again.');
+    }, 8_000);
+    try {
+      await client.requestAnalysis('Suggest the best viewing mode for this scene');
+    } catch (e) {
+      if (analyseTimeoutRef.current) { clearTimeout(analyseTimeoutRef.current); analyseTimeoutRef.current = null; }
+      setIsAnalysing(false);
+      setAnalyseError((e as Error).message);
+      console.warn('[ui] analyse error:', (e as Error).message);
+    }
+  }, [client, isAnalysing]);
+
+  const handleComparePrev = (): void => {
+    if (!prevRecommendation) { return; }
+    setOverlay('compare');
+    setActiveOverlay('compare');
   };
 
   const switchClip = (): void => {
     const next = (clip === 'night' ? 'day' : 'night') as ClipId;
     setClip(next);
     engine.load(next, engine.state.mode);
+  };
+
+  const openAssistant = (): void => {
+    console.log('[ui] assistant open rec=', recommendation?.id ?? 'null', 'focused=', lastFocusedBtn);
+    setLastFocusedBtn('assistant');
+    setOverlay('assistant');
   };
 
   return (
@@ -197,22 +269,15 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
           </View>
         )}
 
-        {/* Loading / error */}
-        {!engine.state.ready && !engine.overlay.visible && (
-          <View style={styles.loadingOverlay}>
-            <Text style={styles.loadingText}>{engine.state.error ?? 'Loading…'}</Text>
-          </View>
-        )}
-
-        {/* Swap overlay */}
-        {engine.overlay.visible && (
-          <View style={styles.swapOverlay}>
-            <Text style={styles.swapText}>{engine.overlay.text}</Text>
-          </View>
-        )}
+        {/* Unified status overlay — loading / applying / resuming / restarting / error */}
+        <StatusOverlay
+          status={engine.playbackStatus}
+          onRetry={() => engine.load(clip, engine.state.mode)}
+          onBack={onBack}
+        />
 
         {/* Ended / Replay */}
-        {engine.state.ended && !engine.overlay.visible && (
+        {engine.playbackStatus.kind === 'ended' && (
           <View style={styles.endedOverlay}>
             <FocusButton
               icon={<ReplayIcon size={36} color="#fff" />}
@@ -267,7 +332,8 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
                     if (isActuallyPaused) { engine.play(); } else { engine.pause(); }
                   }}
                   onFocus={() => setLastFocusedBtn('play')}
-                  hasTVPreferredFocus={lastFocusedBtn === 'play'}
+                  hasTVPreferredFocus={effectiveFocusedBtn === 'play'}
+                  disabled={isTransition}
                   variant="primary"
                   style={styles.playBtn}
                 />
@@ -288,7 +354,8 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
                   label="Clip"
                   onPress={switchClip}
                   onFocus={() => setLastFocusedBtn('clip')}
-                  hasTVPreferredFocus={lastFocusedBtn === 'clip'}
+                  hasTVPreferredFocus={effectiveFocusedBtn === 'clip'}
+                  disabled={isTransition}
                   variant="secondary"
                   style={styles.actionBtn}
                   labelStyle={styles.actionLabel}
@@ -298,31 +365,39 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
                   label="Modes"
                   onPress={() => setOverlay('modes')}
                   onFocus={() => setLastFocusedBtn('modes')}
-                  hasTVPreferredFocus={lastFocusedBtn === 'modes'}
+                  hasTVPreferredFocus={effectiveFocusedBtn === 'modes'}
+                  disabled={isTransition}
                   variant="secondary"
                   style={styles.actionBtn}
                   labelStyle={styles.actionLabel}
                 />
                 <FocusButton
-                  icon={<SparkleIcon size={28} color={recommendation ? Colors.accent : '#fff'} />}
+                  icon={<SparkleIcon size={28} color={hasRec ? Colors.accent : '#fff'} />}
                   label="Assistant"
-                  onPress={() => setOverlay('assistant')}
+                  onPress={openAssistant}
                   onFocus={() => setLastFocusedBtn('assistant')}
-                  hasTVPreferredFocus={lastFocusedBtn === 'assistant'}
+                  hasTVPreferredFocus={effectiveFocusedBtn === 'assistant'}
+                  disabled={isTransition}
                   variant="secondary"
                   style={styles.actionBtn}
                   labelStyle={styles.actionLabel}
                 />
-                <FocusButton
-                  icon={<CompareIcon size={28} color="#fff" />}
-                  label="Compare"
-                  onPress={() => { if (recommendation) { setOverlay('compare'); } }}
-                  onFocus={() => setLastFocusedBtn('compare')}
-                  hasTVPreferredFocus={lastFocusedBtn === 'compare'}
-                  variant="secondary"
-                  style={styles.actionBtn}
-                  labelStyle={styles.actionLabel}
-                />
+                <View>
+                  <FocusButton
+                    icon={<CompareIcon size={28} color="#fff" />}
+                    label="Compare"
+                    onPress={() => { if (hasRec || hasPrevRec) { setOverlay('compare'); } }}
+                    onFocus={() => setLastFocusedBtn('compare')}
+                    hasTVPreferredFocus={effectiveFocusedBtn === 'compare'}
+                    disabled={isTransition || (!hasRec && !hasPrevRec)}
+                    variant="secondary"
+                    style={styles.actionBtn}
+                    labelStyle={styles.actionLabel}
+                  />
+                  {!hasRec && !hasPrevRec && (
+                    <Text style={styles.disabledHint}>Available after a recommendation</Text>
+                  )}
+                </View>
               </View>
             </View>
           </View>
@@ -333,27 +408,33 @@ export const PlayerScreen: React.FC<PlayerScreenProps> = ({initialClip, onBack, 
           <ModesOverlay
             currentMode={engine.state.mode}
             onSelect={handleModeSelect}
-            onClose={() => { setOverlay(null); setActiveOverlay(null); }}
+            onClose={closeOverlay}
           />
         )}
 
-        {overlay === 'assistant' && recommendation && (
+        {overlay === 'assistant' && (
           <AssistantOverlay
             recommendation={recommendation}
+            prevRecommendation={prevRecommendation}
             onApply={handleApplyRec}
             onCompare={handleCompareRec}
             onDismiss={handleDismissRec}
+            onAnalyse={handleAnalyse}
+            onComparePrev={handleComparePrev}
+            isTransition={isTransition}
+            isAnalysing={isAnalysing}
+            analyseError={analyseError}
           />
         )}
 
-        {overlay === 'compare' && recommendation && (
+        {overlay === 'compare' && (recommendation ?? prevRecommendation) && (
           <CompareOverlay
             clip={clip}
             currentMode={engine.state.mode}
-            recommendation={recommendation}
+            recommendation={(recommendation ?? prevRecommendation)!}
             onKeep={handleKeepCompare}
             onRevert={handleRevertCompare}
-            onBack={() => { setOverlay(null); setActiveOverlay(null); }}
+            onBack={closeOverlay}
           />
         )}
       </ScaledStage>
@@ -429,22 +510,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
   },
   phonePillText: {color: Colors.muted, fontSize: 17},
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 5,
-  },
-  loadingText: {color: Colors.muted, fontSize: 28},
-  swapOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(7,9,13,0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 25,
-  },
-  swapText: {color: Colors.text, fontSize: 48, fontWeight: '300', letterSpacing: 1},
   endedOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(7,9,13,0.7)',
@@ -492,4 +557,11 @@ const styles = StyleSheet.create({
   actionBtns: {flexDirection: 'row', gap: 16},
   actionBtn: {minWidth: 160},
   actionLabel: {fontSize: 22},
+  disabledHint: {
+    color: Colors.muted,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 6,
+    opacity: 0.7,
+  },
 });
