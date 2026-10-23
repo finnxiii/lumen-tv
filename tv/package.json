@@ -16,7 +16,8 @@
     "build:debug": "react-native build-vega --build-type Debug",
     "build:app": "npm-run-all build:release",
     "build": "npm-run-all build:release",
-    "release": "npm-run-all lint test build:app"
+    "release": "npm-run-all lint test build:app",
+    "fake-phone": "node scripts/fake-phone.js"
   },
   "dependencies": {
     "@amazon-devices/react-native-kepler": "~4.0.0",

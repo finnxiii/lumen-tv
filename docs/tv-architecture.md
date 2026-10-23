@@ -143,19 +143,60 @@ Seeking freezes the picture permanently on the Virtual Device. Mode changes and 
 
 The first load (swap 0) skips steps 1–4 (no old player to tear down).
 
-### Long-pause resume
+### Playback status state machine
 
-If the player has been paused for more than 10 s, `play()` shows a full-screen "Resuming…" overlay, calls `play()`, then hides the overlay only after the `'playing'` event fires and at least 1 s of `currentTime` has advanced (max 4 s total).
+`PlaybackStatus` is the single source of truth for all loading and transition states.
+
+```
+loading         — first load of a clip
+applying        — mode-switch swap in progress ("Previewing <Mode>…")
+resuming        — long pause detected; waiting for playback rate to normalise
+restarting      — resuming timed out; reloading the current clip from the start
+playing         — normal playback
+paused          — user paused
+ended           — clip finished
+error           — unrecoverable error (shows Retry + Back)
+```
+
+`StatusOverlay` renders for `loading | applying | resuming | restarting | error` with a 200 ms fade-in. All playback and mode buttons are disabled while status is one of `loading | applying | resuming | restarting`; the back key is also ignored during these transitions.
+
+### Long-pause resume (Vega VD fast-catchup quirk)
+
+After a pause > 3 s the Vega Virtual Device resumes at 2–5× speed to catch up to wall-clock time. The engine detects and handles this:
+
+1. `play()` or a system-key resume (`'playing'` event) with pause duration > 3 s → status = `resuming`, overlay shown **before** calling `play()`.
+2. Rate monitor polls every 250 ms: `rate = Δ currentTime / Δ wall time`.
+3. When `0.8 ≤ rate ≤ 1.2` for 4 consecutive samples (1 s) → status = `playing`, overlay hides.
+4. If rate has not normalised within 6 s → status = `restarting` → reload the clip from the start.
+
+Short pauses (≤ 3 s) resume normally without the overlay. The system play key (hardware remote) triggers the same logic via the player's `'playing'` event.
 
 ### `ENABLE_SEEK` flag
 
-`config.ts` exports `ENABLE_SEEK = false`. When `true`, ±10 s seek buttons appear and the remote rewind/fastforward keys are wired. Seek is not safe on the Virtual Device — this flag exists solely for testing on hardware.
+`config.ts` exports `ENABLE_SEEK = false`. When `true`, ±10 s seek buttons appear. Seek freezes the picture permanently on the Virtual Device — this flag exists solely for testing on physical hardware.
+
+---
+
+### AI Assistant panel — always available
+
+The Assistant overlay is always mounted when the assistant panel is open, even without an active recommendation. It has four states:
+
+| State | Trigger | Primary action |
+|-------|---------|---------------|
+| Active recommendation | `ai:recommendation` received | Apply / Compare first / Dismiss |
+| Analysing | `requestAnalysis()` in flight | — (spinner) |
+| Error | Analysis timed out or failed | Retry |
+| Empty | Panel opened, no recommendation | "Analyse this scene" button |
+
+When a recommendation is applied or dismissed, it is kept as `prevRecommendation` and shown as a "Last suggestion" row in the empty state for the Compare action.
+
+`requestAnalysis()` is implemented on both clients: `SocketSessionClient` calls `POST /api/ai/recommend`; `MockSessionClient` fires a fake recommendation after 900 ms.
 
 ---
 
 ## Session & data flow
 
-`SessionContext` owns the client. Two implementations, switched by `USE_MOCK_SESSION` in `config.ts`:
+`SessionContext` owns the client. Two implementations, switched by `USE_MOCK_SESSION` in `config.ts` (or `config.local.ts`):
 
 | Client | Behaviour |
 |--------|-----------|
@@ -207,6 +248,8 @@ If the player has been paused for more than 10 s, `play()` shows a full-screen "
 - **One hardware decoder at a time** — two live `VideoPlayer` instances crash the app.
 - **`deinitialize()` is slow** (~3 s from swap 2 onward on the Virtual Device).
 - **`onSurfaceViewCreated` fires twice** on a key-change remount (React 19); guard the handler.
+- **Fast-forward catchup after long pause** — VD resumes at 2–5× speed after > 3 s pause; handled by the rate monitor in `usePlayerEngine.ts`.
+- **Play key handled by system** — the play/pause remote key is intercepted by system media controls; do not use it as a toggle in the app.
 - **`overflow: 'hidden'` creates an opaque layer** — do not combine with `backgroundColor: 'transparent'` on a container that should be transparent.
 - **SVG unavailable** — icons use the border/transform triangle trick with plain `View` elements.
 - **`initialize()` must follow `setSurfaceHandle`** — call `setSurfaceHandle` immediately in `onSurfaceViewCreated`; do not guard it.

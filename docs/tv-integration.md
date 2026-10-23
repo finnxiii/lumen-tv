@@ -6,6 +6,23 @@ For the full event contract see [`shared/contract.md`](../shared/contract.md). D
 
 ---
 
+## Verified end-to-end (real backend + VD)
+
+The following flow has been confirmed working with the backend from `main` and the TV app on the Vega Virtual Device:
+
+| Step | What was tested | Result |
+|------|----------------|--------|
+| Session create | `POST /api/sessions` → room code returned | ✅ |
+| TV joins via Socket.IO | `session:state` received with `phoneConnected: false` | ✅ |
+| Phone joins | `POST /api/sessions/:code/join` → `session:state` with `phoneConnected: true` | ✅ |
+| Mode switch | Phone emits `mode:update` → backend broadcasts `settings:apply` → TV loads variant | ✅ |
+| AI recommend | `POST /api/ai/recommend` → `ai:recommendation` socket event → TV opens panel | ✅ |
+| Scene insights | `scene:insights` received after backend processes frame data | ✅ |
+
+**`overlay:open` on AI recommendation**: the backend does not emit `overlay:open` alongside `ai:recommendation`. The TV opens the assistant panel locally whenever `ai:recommendation` arrives. The phone does not need to emit `overlay:open` for this flow.
+
+---
+
 ## Connection
 
 The TV app connects to the backend on startup via Socket.IO:
@@ -147,39 +164,81 @@ The TV calls `engine.play()` or `engine.pause()` accordingly. `seek` is forwarde
 
 ### Option 1 — mock session (no backend required)
 
-Set `USE_MOCK_SESSION = true` in `tv/src/config.ts`. The TV uses `MockSessionClient`, which:
-- Simulates a phone joining ~4 s after launch
-- Fires a fake AI recommendation ~10 s into playback
+Set `USE_MOCK_SESSION = true` in `tv/src/config.ts` (the committed default). The app uses `MockSessionClient`:
+- Mock phone joins ~4 s after launch
+- Fake AI recommendation fires ~10 s into playback
 
-This lets the TV UI be exercised without a running backend.
-
-### Option 2 — real backend on localhost
-
-1. Start the backend: `cd backend && npm start` (default port 4000)
-2. Set `USE_MOCK_SESSION = false` and `SOCKET_URL = 'http://localhost:4000'` in `tv/src/config.ts`
-3. Build and run the TV app on the Virtual Device
-4. Check the Vega device network is bridged to your Mac (Vega VD uses the host network by default)
-
-To simulate a phone sending a mode update, use curl:
+### Option 2 — fake-phone script (real backend, no phone website)
 
 ```sh
-# 1. Create a session and note the code
-CODE=$(curl -s -X POST http://localhost:4000/api/sessions | jq -r .code)
-echo "code: $CODE"
-
-# 2. Emit mode:update via the Socket.IO test tool (or backend REST shim)
-curl -s -X POST http://localhost:4000/api/sessions/$CODE/mode \
-  -H 'Content-Type: application/json' \
-  -d '{"mode":"cinema","source":"phone"}'
+# Start the backend, build and run the TV, then from tv/:
+npm run fake-phone -- <ROOMCODE>
 ```
 
-The backend should broadcast `settings:apply` and the TV player should swap to the cinema variant.
+Interactive commands:
+```
+phone> mode bright        ← triggers mode:update → settings:apply → TV loads variant
+phone> ai too dark        ← calls POST /api/ai/recommend → ai:recommendation → TV opens panel
+phone> undo               ← emits settings:undo
+phone> quit
+```
 
-### Option 3 — phone + backend
+Run with `--demo` for the scripted sequence (join → bright → AI → original).
+
+See `tv/README.md` — "Testing without the phone app" for full usage.
+
+### Option 3 — phone website + backend
 
 1. Start the backend
-2. Open the phone controller site and join the room code shown on the TV pairing screen
+2. Open the phone controller site and join with the room code from the TV pairing screen
 3. Use the phone UI to switch modes and send natural-language requests
+
+---
+
+## Exact phone payloads
+
+These are the events and payloads the phone must send. The `fake-phone.js` script uses exactly these.
+
+### Join a session
+
+```
+POST /api/sessions/:code/join
+Content-Type: application/json
+Body: {}
+```
+
+### Connect to Socket.IO
+
+```js
+io(BACKEND_URL, {
+  transports: ['websocket'],
+  query: { code, role: 'phone' },
+});
+```
+
+### Switch mode
+
+```json
+socket.emit("mode:update", { "mode": "cinema", "source": "phone" })
+```
+
+Valid modes: `original` | `cinema` | `night` | `bright` | `sports`.
+
+### Request AI recommendation
+
+```
+POST /api/ai/recommend
+Content-Type: application/json
+Body: { "code": "<ROOMCODE>", "request": "I can't see in this dark scene" }
+```
+
+Result arrives asynchronously via the `ai:recommendation` socket event on the TV.
+
+### Undo
+
+```json
+socket.emit("settings:undo", {})
+```
 
 ---
 
