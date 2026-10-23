@@ -8,6 +8,7 @@ interface FocusButtonProps {
   onPress: () => void;
   onFocus?: () => void;
   hasTVPreferredFocus?: boolean;
+  disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   labelStyle?: StyleProp<TextStyle>;
   variant?: 'primary' | 'secondary' | 'ghost';
@@ -20,6 +21,7 @@ export const FocusButton: React.FC<FocusButtonProps> = ({
   onPress,
   onFocus: onFocusProp,
   hasTVPreferredFocus,
+  disabled = false,
   style,
   labelStyle,
   variant = 'secondary',
@@ -29,10 +31,11 @@ export const FocusButton: React.FC<FocusButtonProps> = ({
 
   return (
     <Pressable
-      onPress={onPress}
-      onFocus={() => { setFocused(true); onFocusProp?.(); }}
+      onPress={disabled ? undefined : onPress}
+      onFocus={() => { if (!disabled) { setFocused(true); onFocusProp?.(); } }}
       onBlur={() => setFocused(false)}
-      hasTVPreferredFocus={hasTVPreferredFocus}
+      hasTVPreferredFocus={disabled ? false : hasTVPreferredFocus}
+      focusable={!disabled}
       testID={testID}
       accessibilityRole="button"
       style={[
@@ -40,18 +43,19 @@ export const FocusButton: React.FC<FocusButtonProps> = ({
         variant === 'primary' && styles.primary,
         variant === 'secondary' && styles.secondary,
         variant === 'ghost' && styles.ghost,
-        focused && styles.focused,
+        focused && !disabled && styles.focused,
+        disabled && styles.disabledOverlay,
         style,
       ]}>
       {icon && label ? (
         <View style={styles.iconRow}>
           {icon}
-          <Text style={[styles.label, focused && styles.labelFocused, labelStyle]}>{label}</Text>
+          <Text style={[styles.label, focused && !disabled && styles.labelFocused, disabled && styles.labelDisabled, labelStyle]}>{label}</Text>
         </View>
       ) : icon ? (
         icon
       ) : (
-        <Text style={[styles.label, focused && styles.labelFocused, labelStyle]}>{label ?? ''}</Text>
+        <Text style={[styles.label, focused && !disabled && styles.labelFocused, disabled && styles.labelDisabled, labelStyle]}>{label ?? ''}</Text>
       )}
     </Pressable>
   );
@@ -80,6 +84,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.focusRing,
     transform: [{scale: 1.04}],
+  },
+  disabledOverlay: {
+    opacity: 0.4,
+  },
+  labelDisabled: {
+    color: '#6b7385',
   },
   iconRow: {
     flexDirection: 'row',

@@ -90,6 +90,11 @@ export class MockSessionClient implements SessionClient {
   }
 
   sendRecommendationResponse(_id: string, _accepted: boolean): void {}
+
+  async requestAnalysis(_request?: string): Promise<void> {
+    // Fire a fresh mock recommendation after a short delay so the spinner is visible
+    setTimeout(() => this.fireRecommendation(), 900);
+  }
   sendSettingsUndo(): void {
     this.emit('settings:apply', {
       mode: this.state.mode,

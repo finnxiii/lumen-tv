@@ -1,6 +1,6 @@
 // Replace with your Cloudflare quick-tunnel URL: cloudflared tunnel --url http://localhost:8000
 export const MEDIA_BASE_URL =
-  'https://label-tasks-off-although.trycloudflare.com';
+  'https://northern-sonic-essays-nokia.trycloudflare.com';
 // TODO: replace with deployed phone URL when backend is live
 export const PHONE_URL = 'https://example.com';
 // Vega Virtual Device (QEMU) cannot reach localhost — use the Mac's LAN IP.

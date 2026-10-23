@@ -78,6 +78,22 @@ export class SocketSessionClient implements SessionClient {
     this.socket?.emit('playback:update', {clipId, position, playing});
   }
 
+  async requestAnalysis(request = 'Suggest the best viewing mode for this scene'): Promise<void> {
+    if (!this._code || this._code === '----') {
+      throw new Error('No active session');
+    }
+    const r = await fetch(`${BACKEND_URL}/api/ai/recommend`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({code: this._code, request}),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({})) as {error?: string};
+      throw new Error(body.error ?? `HTTP ${r.status}`);
+    }
+    // Result arrives via the ai:recommendation socket event
+  }
+
   on<K extends SessionEventName>(event: K, handler: (p: SessionEventPayload<K>) => void): void {
     if (!this.handlers.has(event)) {this.handlers.set(event, new Set());}
     this.handlers.get(event)!.add(handler as (p: unknown) => void);
