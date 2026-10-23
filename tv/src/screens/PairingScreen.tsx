@@ -40,7 +40,8 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({onStart}) => {
     return () => sub.remove();
   }, []);
 
-  const joinUrl = `${PHONE_URL}/join/${client.code}`;
+  const displayCode = sessionState?.code ?? client.code;
+  const joinUrl = `${PHONE_URL}/join/${displayCode}`;
   const phoneConnected = sessionState?.phoneConnected ?? false;
 
   const fmt = (s: number): string =>
@@ -61,7 +62,7 @@ export const PairingScreen: React.FC<PairingScreenProps> = ({onStart}) => {
         <View style={styles.left}>
           <QRCode url={joinUrl} size={220} />
           <View style={styles.codeRow}>
-            {client.code.split('').map((ch, i) => (
+            {displayCode.split('').map((ch, i) => (
               <View key={i} style={styles.codeBox}>
                 <Text style={styles.codeChar}>{ch}</Text>
               </View>
